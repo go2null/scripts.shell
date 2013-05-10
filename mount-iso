@@ -9,6 +9,8 @@
 ##:0.1.2:2013-04-12:go2null
 ## * FIX: file manager not reliably launched
 ## * TODO: Reuse exiting empty mount point directory
+##:0.2.0:2013-04-14:go2null
+## * NEW: Reuse exiting empty mount point directory
 
 ## get script name
 me_name=$(basename "$0")
@@ -62,6 +64,10 @@ base_name=$(basename "$1")
 mnt_dir="/mnt/$base_name"
 i_counter=0
 while [ -e "$mnt_dir" ]; do
+	## check if empty, left over from a previous mount
+	if [ -d "$mnt_dir" ]; then
+		[ $(ls -A "$mnt_dir" | wc -w) -eq 0 ] && break
+	fi
 	mnt_dir=/mnt/$base_name-$i_counter
 	i_counter=$((i_counter + 1))
 done
