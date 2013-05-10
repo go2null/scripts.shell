@@ -11,6 +11,8 @@
 ## * TODO: Reuse exiting empty mount point directory
 ##:0.2.0:2013-04-14:go2null
 ## * NEW: Reuse exiting empty mount point directory
+##:0.2.1:2013-04-14:go2null
+## * FIX: correctly parses user's response to umount
 
 ## get script name
 me_name=$(basename "$0")
@@ -88,13 +90,13 @@ else
 		user_response=""
 		echo "Unmount $mnt_dir? [y|n]"
 		read user_response
-		if [ "$user_response" == "y" ]; then
-			sudo umount $mnt_dir
+		if [ "$user_response" = "y" ]; then
+			sudo umount "$mnt_dir"
 			[ $? -eq 0 ] && retry_mount=1
-			sudo rmdir $mnt_dir 2>/dev/null
+			sudo rmdir "$mnt_dir" 2>/dev/null
 		fi
 	done
-	[ $retry_mount -eq 1 ] &&    $me_fullname $1
+	[ $retry_mount -eq 1 ] && $me_fullname "$1"
 fi
 
 ## cleanup
