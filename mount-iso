@@ -2,10 +2,12 @@
 
 ## Can be run from the shell prompt, or from a file manager context menu
 
-##:2013-04-11:0.1:go2null
+##:0.1:2013-04-11:go2null
 ## * Initial release
+##:0.1.1:2013-04-11:go2null
+## * Optimization
 
-# get script name
+## get script name
 me_name=$(basename "$0")
 me_fullname=$(readlink -f "$0")
 me_fullname_bin="/usr/local/bin/$me_name"
@@ -15,24 +17,23 @@ me_fullname_bin="/usr/local/bin/$me_name"
 ## NOTE: This does not replace an existing valid link
 bin_update=0
 if [ -e "$me_fullname_bin" ]; then
-    readlink -e "$me_fullname_bin" >/dev/null
-    [ $? -eq 0 ] || bin_update=1
+	readlink -e "$me_fullname_bin" >/dev/null
+	[ $? -eq 0 ] || bin_update=1
 else
-    bin_update=1
+	bin_update=1
 fi
 if [ $bin_update -eq 1 ]; then
-        chmod a+x "$me_fullname"
-        sudo rm -f "$me_fullname_bin"
-        sudo ln -s "$me_fullname" "$me_fullname_bin"
+	chmod a+x "$me_fullname"
+	sudo ln -fs "$me_fullname" "$me_fullname_bin"
 fi
 
 ## validate iso filename
 if [ ! -e "$1" ]; then
-    echo "Invalid ISO file:"
-    echo "  $1"
-    echo "Press any key to exit."
-    read dummy
-    exit
+	echo "Invalid ISO file:"
+	echo "  $1"
+	echo "Press any key to exit."
+	read dummy
+	exit
 fi
 
 ## launch in file manager, or just list directories
@@ -43,12 +44,12 @@ which pcmanfm >/dev/null
 ## check if ISO already mounted
 mount | grep "$1 on" >/dev/null
 if [ $? -eq 0 ]; then
-    echo "$1\nis already mounted at:"
-    for mnt_dir in $(mount | grep "$1 on" | cut -d " " -f 3); do
-        echo "$mnt_dir"
-        [ "$fm_string" = "" ] || "$fm_string" "$mnt_dir" &
-    done
-    exit
+	echo "$1\nis already mounted at:"
+	for mnt_dir in $(mount | grep "$1 on" | cut -d " " -f 3); do
+		echo "$mnt_dir"
+		[ "$fm_string" = "" ] || "$fm_string" "$mnt_dir" &
+	done
+	exit
 fi
 
 ## build mount directory string
@@ -56,33 +57,33 @@ base_name=$(basename "$1")
 mnt_dir="/mnt/$base_name"
 i_counter=0
 while [ -e "$mnt_dir" ]; do
-    mnt_dir=/mnt/$base_name-$i_counter
-    i_counter=$((i_counter + 1))
+	mnt_dir=/mnt/$base_name-$i_counter
+	i_counter=$((i_counter + 1))
 done
 
 ## mount
 sudo mkdir "$mnt_dir"
 sudo mount -o loop "$1" "$mnt_dir"
 if [ $? -eq 0 ]; then
-    echo "$1 \n  mounted to:\n  $mnt_dir"
-    [ "$fm_string" = "" ] || "$fm_string" "$mnt_dir" &
+	echo "$1 \n  mounted to:\n  $mnt_dir"
+	[ "$fm_string" = "" ] || "$fm_string" "$mnt_dir" &
 else
-    echo ''
-    echo "Error mounting \"$1\""
-    echo 'The most likely reason is that too many ISOs are already mounted.'
-    echo ''
-    retry_mount=0
-    for mnt_dir in $(grep "/dev/loop[0-9]*" /etc/mtab | cut -d ' ' -f 2); do
-        user_response=""
-        echo "Unmount $mnt_dir? [y|n]"
-        read user_response
-        if [ "$user_response" == "y" ]; then
-            sudo umount $mnt_dir
-            [ $? -eq 0 ] && retry_mount=1
-            sudo rmdir $mnt_dir 2>/dev/null
-        fi
-    done
-    [ $retry_mount -eq 1 ] &&    $me_fullname $1
+	echo ''
+	echo "Error mounting \"$1\""
+	echo 'The most likely reason is that too many ISOs are already mounted.'
+	echo ''
+	retry_mount=0
+	for mnt_dir in $(grep "/dev/loop[0-9]*" /etc/mtab | cut -d ' ' -f 2); do
+		user_response=""
+		echo "Unmount $mnt_dir? [y|n]"
+		read user_response
+		if [ "$user_response" == "y" ]; then
+			sudo umount $mnt_dir
+			[ $? -eq 0 ] && retry_mount=1
+			sudo rmdir $mnt_dir 2>/dev/null
+		fi
+	done
+	[ $retry_mount -eq 1 ] &&    $me_fullname $1
 fi
 
 ## cleanup
