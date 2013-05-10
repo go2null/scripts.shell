@@ -6,6 +6,9 @@
 ## * Initial release
 ##:0.1.1:2013-04-11:go2null
 ## * Optimization
+##:0.1.2:2013-04-12:go2null
+## * FIX: file manager not reliably launched
+## * TODO: Reuse exiting empty mount point directory
 
 ## get script name
 me_name=$(basename "$0")
@@ -49,6 +52,8 @@ if [ $? -eq 0 ]; then
 		echo "$mnt_dir"
 		[ "$fm_string" = "" ] || "$fm_string" "$mnt_dir" &
 	done
+	##	file manager not invoked reliably, add delay
+	sleep 1
 	exit
 fi
 
