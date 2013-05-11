@@ -13,6 +13,8 @@
 ## * NEW: Reuse exiting empty mount point directory
 ##:0.2.1:2013-04-14:go2null
 ## * FIX: correctly parses user's response to umount
+##:0.3.0:2013-05-10:go2null
+## * NEW: Sets exit status to 1 if fails.
 
 ## get script name
 me_name=$(basename "$0")
@@ -40,7 +42,7 @@ if [ ! -e "$1" ]; then
 	echo "  $1"
 	echo "Press any key to exit."
 	read dummy
-	exit
+	exit 1
 fi
 
 ## launch in file manager, or just list directories
