@@ -6,21 +6,25 @@
 
 ## == USER SETTINGS == ##
 ## directories to use
-DIR_1=~/Wallpaper/
-DIR_2=/home/Public/Pictures
-DIR_3=/usr/share/backgrounds
-DIR_4=/usr/share/lxde/wallpapers
+DIR_1="~/Wallpaper/"
+DIR_2='/home/Public/Pictures'
+DIR_3='/usr/share/backgrounds'
+DIR_4='/usr/share/lxde/wallpapers'
+
 ## how often to change wallpaper
-INTERVAL=1m
+INTERVAL='1m'
+
 ## how to rotate - alphabetically ([N]ext| [P]revious) or [R]andom?
-ROTATE=N
+ROTATE='N'
+
 
 ## == command-line overrides == ##
 while [ $# -gt 0 ]; do
     case "$1" in
-        n|N|next|NEXT)                     ROTATE=N ;;
-        p|P|prev|PREV|previous|PREVIOUS) ROTATE=P ;;
-        r|R|random|RANDOM)                 ROTATE=R ;;
+        n|N|next|NEXT)                     ROTATE='N' ;;
+        p|P|prev|PREV|previous|PREVIOUS) ROTATE='P' ;;
+        r|R|random|RANDOM)                 ROTATE='R' ;;
+
         *)    if [ -f "$1" ]; then
                 pcmanfm --set-wallpaper "$1"
                 exit
@@ -29,11 +33,13 @@ while [ $# -gt 0 ]; do
 done
 
 ## == exit if already running == ##
-## TODO
 ## https://bbs.archlinux.org/viewtopic.php?id=77395
+[ $(pgrep -c -f "/bin/sh $0") -gt 1 ] && { echo $0 is already running; exit; }
+
 
 ## == generate file list == ##
-WP_LIST=/tmp/wallpaper-rotator.lst
+WP_LIST=/tmp/$(basename -s -sh "$0").lst
+
 rm -f "$WP_LIST"
 COUNTER=1
 while true; do
@@ -43,15 +49,26 @@ while true; do
     COUNTER=$(($COUNTER+1))
 done
 
+## == get desktop manager == ##
+DM='PCMANFM'
+DM_SET_WP='pcmanfm --set-wallpaper'
+
+
 ## get current wallpaper == ##
-##   the following works if same wallpaper is used on all desktops
-##   this is controlled by "wallpaper_common=1"
-WP_CURRENT=$(grep -h "^wallpaper=" ~/.config/pcmanfm/lubuntu/pcmanfm.conf | cut -d = -f 2)
-[ -z $WP_CURRENT ] && WP_CURRENT=$(grep -h "^wallpaper0=" ~/.config/pcmanfm/lubuntu/pcmanfm.conf | cut -d = -f 2)
+case "$DM" in
+PCMANFM)
+
+    ##   the following works if same wallpaper is used on all desktops
+    ##   this is controlled by "wallpaper_common=1"
+    WP_CURRENT=$(grep -h "^wallpaper=" ~/.config/pcmanfm/lubuntu/pcmanfm.conf | cut -d = -f 2)
+    [ -z $WP_CURRENT ] && WP_CURRENT=$(grep -h "^wallpaper0=" ~/.config/pcmanfm/lubuntu/pcmanfm.conf | cut -d = -f 2)
+    ;;
+esac
+
 
 ## == rotate == ##
 while true; do
-    case $ROTATE in
+    case "$ROTATE" in
         N)
             WP_NEW=$(grep -FA 1 "$WP_CURRENT" "$WP_LIST" | grep -v "$WP_CURRENT")
             [ -z $WP_NEW ] && WP_NEW=$(head -1 "$WP_LIST")
@@ -62,7 +79,8 @@ while true; do
             ;;
         R) WP_NEW=$(shuf -n1 < "$WP_LIST") ;;
     esac
-    pcmanfm --set-wallpaper "$WP_NEW"
+    $DM_SET_WP "$WP_NEW"
+    echo Wallpaper set to: $WP_NEW
     WP_CURRENT=$WP_NEW
     sleep $INTERVAL
 done
