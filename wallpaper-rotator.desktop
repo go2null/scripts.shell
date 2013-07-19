@@ -1,0 +1,12 @@
+[Desktop Entry]
+Encoding=UTF-8
+Type=Application
+Name=Wallpaper Rotator
+Name[en_US]=Wallpaper Rotator
+Icon=wallpaper
+Exec=/home/me/bin/wallpaper-rotator.sh next
+Comment[en_US]=Rotates wallpapers alphabetically or randomly
+StartupNotify=true
+Version=1.0
+Terminal=false
+Categories=Utility;
