@@ -1,0 +1,68 @@
+#! /bin/sh
+
+## == inspirations == ##
+## http://ubuntuforums.org/showthread.php?t=2076417
+## http://www.pclinuxos.com/forum/index.php?topic=87784.0
+
+## == USER SETTINGS == ##
+## directories to use
+DIR_1=~/Wallpaper/
+DIR_2=/home/Public/Pictures
+DIR_3=/usr/share/backgrounds
+DIR_4=/usr/share/lxde/wallpapers
+## how often to change wallpaper
+INTERVAL=1m
+## how to rotate - alphabetically ([N]ext| [P]revious) or [R]andom?
+ROTATE=N
+
+## == command-line overrides == ##
+while [ $# -gt 0 ]; do
+    case "$1" in
+        n|N|next|NEXT)                     ROTATE=N ;;
+        p|P|prev|PREV|previous|PREVIOUS) ROTATE=P ;;
+        r|R|random|RANDOM)                 ROTATE=R ;;
+        *)    if [ -f "$1" ]; then
+                pcmanfm --set-wallpaper "$1"
+                exit
+            fi
+    esac
+done
+
+## == exit if already running == ##
+## TODO
+## https://bbs.archlinux.org/viewtopic.php?id=77395
+
+## == generate file list == ##
+WP_LIST=/tmp/wallpaper-rotator.lst
+rm -f "$WP_LIST"
+COUNTER=1
+while true; do
+    eval "DIR=\$DIR_$COUNTER"
+    [ -z "$DIR" ] && break
+    [ -d "$DIR" ] && find "$DIR" -type f >> "$WP_LIST"
+    COUNTER=$(($COUNTER+1))
+done
+
+## get current wallpaper == ##
+##   the following works if same wallpaper is used on all desktops
+##   this is controlled by "wallpaper_common=1"
+WP_CURRENT=$(grep -h "^wallpaper=" ~/.config/pcmanfm/lubuntu/pcmanfm.conf | cut -d = -f 2)
+[ -z $WP_CURRENT ] && WP_CURRENT=$(grep -h "^wallpaper0=" ~/.config/pcmanfm/lubuntu/pcmanfm.conf | cut -d = -f 2)
+
+## == rotate == ##
+while true; do
+    case $ROTATE in
+        N)
+            WP_NEW=$(grep -FA 1 "$WP_CURRENT" "$WP_LIST" | grep -v "$WP_CURRENT")
+            [ -z $WP_NEW ] && WP_NEW=$(head -1 "$WP_LIST")
+            ;;
+        P)
+            WP_NEW=$(grep -FB 1 "$WP_CURRENT" "$WP_LIST" | grep -v "$WP_CURRENT")
+            [ -z $WP_NEW ] && WP_NEW=$(tail -1 "$WP_LIST")
+            ;;
+        R) WP_NEW=$(shuf -n1 < "$WP_LIST") ;;
+    esac
+    pcmanfm --set-wallpaper "$WP_NEW"
+    WP_CURRENT=$WP_NEW
+    sleep $INTERVAL
+done
