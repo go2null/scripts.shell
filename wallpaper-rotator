@@ -9,9 +9,11 @@
 # * Fixed NEXT, PREV and RANDOM options
 # *   (RANDOM does not support NEXT and PREV)
 # * Added support for START, STOP and RESTART
-#:0.3.1:2013-07-22:go2null
+#:0.3.1:2013-07-25:go2null
 # * Fixed syntax and typo bugs
 # * Fixed bug prevent normal operation
+#:0.3.2:2013-07-25:go2null
+# * Fix: Random now works correctly
 
 # ** inspirations ** #
 # http://ubuntuforums.org/showthread.php?t=2076417
@@ -118,7 +120,7 @@ fi
 
 # ** rotate ** #
 while true; do
-	if [ "$RANDOM" = 0 ]; then
+	if [ "$RANDOM" -ne 0 ]; then
 		WP_NEW=$(shuf -n1 < "$WP_LIST")
 	else
 		getNextWallpaper
