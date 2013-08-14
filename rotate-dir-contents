@@ -1,0 +1,107 @@
+#!/bin/sh
+
+# == USER SETTINGS == #
+# Directory to rotate contents
+DIR="$HOME/Downloads"
+# Period to rotate = [D]AILY|[W]EEKLY|[M]ONTHLY|[Y]EARLY
+#	Default is WEEKLY
+PERIOD=''
+# How many periods to keep
+KEEP=5
+# Name format for rotated directories. COUNTER|FORMAT string for the 'date' command
+#	Comment out, or leave empty to use default format
+NAME_FORMAT=''
+
+# == VALIDATIONS == #
+# Directory to rotate contents
+[ -d "$DIR" ] || { echo 'Invalid directory - '$DIR; exit 1; }
+[ -w "$DIR" ] || { echo 'So no have write permissions to '$DIR exit 1; }
+
+# == INIT VARS == #
+# period
+if [ -z "$PERIOD" ]; then
+	PERIOD='WEEKLY'
+else
+	PERIOD=$echo $PERIOD | tr '[:lower:]' '[:upper:]'
+fi
+# name format
+if [ -z $NAME_FORMAT ]; then
+	case $PERIOD in
+		D|DAILY)
+			NAME_FORMAT='day.%F' ;;
+		W|WEEKLY)
+			NAME_FORMAT='week.%W' ;;
+		M|MONTHLY)
+			NAME_FORMAT='month.%m' ;;
+		Y|YEARLY)
+			NAME_FORMAT='week.%Y' ;;
+		*)
+			echo 'Invalid PERIOD - '$PERIOD
+			exit 1
+			;;
+	esac
+else
+	case "$NAME_FORMAT" in
+		C|c|counter|Counter|COUNTER)
+		NAME_FORMAT=COUNTER;;
+	esac
+fi
+# name of directory to rotate into
+if [ "$NAME_FORMAT" = "COUNTER" ]; then
+	# TODO
+	echo 'This functionality is not yet available'
+	exit 1
+else
+	NAME=$NAME$(date +"$NAME_FORMAT")
+	if [ $? -ne 0 ]; then
+		echo 'Invalid Name format specified - '$NAME_FORMAT
+		exit 1
+	fi
+fi
+NAME=$DIR/$NAME
+# file to store rotated dirs in
+LOG_FILE=$DIR/$(basename "$0").dirs
+# temp fileis to store files & dirs to move
+BASE_NAME=$(basename "$0")
+TEMP_LIST=$(mktemp --suffix .$BASE_NAME)
+TEMP_LOG_FILE=$(mktemp --suffix .$BASE_NAME)
+TEMP_FILE=$(mktemp --suffix .$BASE_NAME)
+
+# == Abort if rotate dir already exists == #
+# as this means that the script was already run
+[ -d "$NAME" ] && { echo 'too early to run'; exit; }
+
+# == Move stuff into new dir == #
+# get new files and dirs to move
+find "$DIR/" -maxdepth 1 | sort > "$TEMP_FILE"
+# remove log file from list
+grep -v "$LOG_FILE" "$TEMP_FILE" > $TEMP_LIST
+# make new dir
+mkdir "$NAME"
+[ $? -ne 0 ] && { echo 'cannot create new rotate dir - '$NAME; exit 1; }
+# get list of files and dirs to move
+if [ -f "$LOG_FILE" ]; then
+	sort "$LOG_FILE" > "$TEMP_LOG_FILE"
+	cp "$TEMP_LIST" "$TEMP_FILE"
+	comm -13 "$TEMP_LOG_FILE" "$TEMP_FILE" > "$TEMP_LIST"
+fi
+# now move them
+while read LINE; do
+	mv "$LINE" "$NAME/"
+done < "$TEMP_LIST"
+# add to log
+echo "$NAME" >> "$LOG_FILE"
+
+# == prune old dirs == #
+NUM_DIRS=$(wc -l < "$LOG_FILE")
+NUM_DIRS_RM=$(expr $NUM_DIRS - $KEEP)
+if [ $NUM_DIRS_RM -gt 0 ]; then
+	# get dirs to remove
+	head -$NUM_DIRS_RM "$LOG_FILE" > $TEMP_LOG_FILE
+	while read LINE; do
+		rm -r "$LINE"
+	done < "$TEMP_LOG_FILE"
+	# remove them from log file
+	sed "1,$NUM_DIRS_RM d" < $LOG_FILE > $TEMP_LOG_FILE
+	mv "$TEMP_LOG_FILE" "$LOG_FILE"
+fi
