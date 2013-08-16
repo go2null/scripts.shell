@@ -14,6 +14,8 @@
 # * Fixed bug prevent normal operation
 #:0.3.2:2013-07-25:go2null
 # * Fix: Random now works correctly
+#:0.3.3:2013-08-16:go2null
+# * Code cleanup
 
 # ** inspirations ** #
 # http://ubuntuforums.org/showthread.php?t=2076417
@@ -30,55 +32,12 @@ INTERVAL='5m'
 # use a random image?
 RANDOM=0
 
-# ** command-line overrides ** #
-while [ $# -gt 0 ]; do
-	case "$1" in
-		r|R|random|RANDOM)				 RANDOM=1         ;;
-		n|N|next|NEXT)					 ACTION='NEXT'    ;;
-		p|P|prev|PREV|previous|PREVIOUS) ACTION='PREV'    ;;
-		start|START)                     ACTION='START'   ;;
-		stop|STOP)                       ACTION='STOP'    ;;
-		restart|RESTART)                 ACTION='RESTART' ;;
-		*)	[ -f "$1" ]               && ACTION=$1        ;;
-	esac
-	shift
-done
-[ -z "$ACTION" ] && ACTION='START'
-
-# ** get PID if already running ** #
-# https://bbs.archlinux.org/viewtopic.php?id=77395
-PID=$(pgrep -c -f "/bin/sh $0")
-
-# ** execute START/STOP/RESTART actions ** #
-([ "$ACTION" = "START" ] && [ "$PID" -gt 0 ]) && exit
-(([ "$ACTION" = "STOP" ] || [ "$ACTION" = "RESTART" ]) && [ "$PID" -gt 0 ]) && kill -9 $PID
-[ "$ACTION" = "STOP" ] && exit
-
-# ** generate file list, only on START, or if it doesn't exist ** #
-WP_LIST=/tmp/$(basename -s -sh "$0").lst
-if [ "$ACTION" = "START" ] || [ ! -f "$WP_LIST" ]; then
-	rm -f "$WP_LIST"
-	COUNTER=1
-	while true; do
-		eval "DIR=\$DIR_$COUNTER"
-		[ -z "$DIR" ] && break
-		[ -d "$DIR" ] && find "$DIR" -type f >> "$WP_LIST"
-		COUNTER=$(($COUNTER+1))
-	done
-fi
-
+# ** HELPER FUNCTIONS ** #
+getDM() {
 # ** get desktop manager ** #
-DM='PCMANFM'
-DM_SET_WP='pcmanfm --set-wallpaper'
-
-setWallpaper() {
-	$DM_SET_WP "$WP_NEW"
-	echo "Wallpaper set to: $WP_NEW"
-	WP_CURRENT=$WP_NEW
+	DM='PCMANFM'
+	DM_SET_WP='pcmanfm --set-wallpaper'
 }
-
-# ** process specified file action ** #
-[ -f "$ACTION" ] && WP_NEW=$ACTION
 
 getCurrentWallpaper() {
 # ** get current wallpaper ** #
@@ -102,17 +61,61 @@ getPrevWallpaper() {
 	[ -z "$WP_NEW" ] && WP_NEW=$(tail -1 "$WP_LIST")
 }
 
-# ** process NEXT/PREV actions ** #
-if [ "$ACTION" = "NEXT" ] || [ "$ACTION" = "PREV" ]; then
-	getCurrentWallpaper
-	if   [ "$ACTION" = "NEXT" ]; then
-		getNextWallpaper
-	elif [ "$ACTION" = "PREV" ]; then
-		getPrevWallpaper
-	fi
+setWallpaper() {
+	$DM_SET_WP "$WP_NEW"
+	echo "Wallpaper set to: $WP_NEW"
+	WP_CURRENT=$WP_NEW
+}
+
+# ** PROCESS INPUTS ** #
+# command-line overrides
+while [ $# -gt 0 ]; do
+	case "$1" in
+		r|R|random|RANDOM)				 RANDOM=1         ;;
+		n|N|next|NEXT)					 ACTION='NEXT'    ;;
+		p|P|prev|PREV|previous|PREVIOUS) ACTION='PREV'    ;;
+		start|START)                     ACTION='START'   ;;
+		stop|STOP)                       ACTION='STOP'    ;;
+		restart|RESTART)                 ACTION='RESTART' ;;
+		*)	[ -f "$1" ]               && ACTION=$1        ;;
+	esac
+	shift
+done
+[ -z "$ACTION" ] && ACTION='START'
+
+# ** execute START/STOP/RESTART actions ** #
+# get PID if already running
+#   https://bbs.archlinux.org/viewtopic.php?id=77395
+PID=$(pgrep -c -f "/bin/sh $0")
+if [ "$PID" -gt 0 ]; then
+	[ "$ACTION" = "START"   ] && exit # already running
+    [ "$ACTION" = "STOP"    ] && kill -9 $PID
+	[ "$ACTION" = "RESTART" ] && kill -9 $PID
+fi
+[ "$ACTION" = "STOP" ] && exit
+
+# ** generate file list, only on START, or if it doesn't exist ** #
+WP_LIST=/tmp/$(basename -s -sh "$0").lst
+if [ "$ACTION" = "START" ] || [ ! -f "$WP_LIST" ]; then
+	rm -f "$WP_LIST"
+	COUNTER=1
+	while true; do
+		eval "DIR=\$DIR_$COUNTER"
+		[ -z "$DIR" ] && break  # stop of 1st empty
+		[ -d "$DIR" ] && find "$DIR" -type f >> "$WP_LIST" # get files in dir and subdirs
+		COUNTER=$(($COUNTER+1))
+	done
 fi
 
+# ** get Desktop specific commands ** #
+getDM
+
 # ** execute file/NEXT/PREV actions ** #
+# get file to use
+[ -f "$ACTION" ]       && WP_NEW=$ACTION
+[ "$ACTION" = "NEXT" ] && { getCurrentWallpaper; getNextWallpaper; }
+[ "$ACTION" = "PREV" ] && { getCurrentWallpaper; getPrevWallpaper; }
+# set wallpaper
 if [ ! -z "$WP_NEW" ]; then
 	setWallpaper
     exit
