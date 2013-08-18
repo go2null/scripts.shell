@@ -27,7 +27,7 @@ VERSION=0.4.0:2013-08-18:go2null
 
 # ** USER SETTINGS ** #
 # directories to use
-DIR_1="~/Wallpaper/"
+DIR_1="$HOME/Wallpapers/"
 DIR_2='/home/Public/Pictures/'
 DIR_3='/usr/share/backgrounds/'
 DIR_4='/usr/share/lxde/wallpapers/'
