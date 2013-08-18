@@ -1,21 +1,23 @@
-#! /bin/sh
+#!/bin/sh
 
-#:0.1.0:2013-07-15:go2null
+VERSION=0.1.0:2013-07-15:go2null
 # * Initial release
-#:0.2.0:2013-07-18:go2null
+VERSION=0.2.0:2013-07-18:go2null
 # * Started to add support for multiple desktop managers
 # * Added .desktop file
-#:0.3.0:2013-07-22:go2null
+VERSION=0.3.0:2013-07-22:go2null
 # * Fixed NEXT, PREV and RANDOM options
 # *   (RANDOM does not support NEXT and PREV)
 # * Added support for START, STOP and RESTART
-#:0.3.1:2013-07-25:go2null
+VERSION=0.3.1:2013-07-25:go2null
 # * Fixed syntax and typo bugs
 # * Fixed bug prevent normal operation
-#:0.3.2:2013-07-25:go2null
+VERSION=0.3.2:2013-07-25:go2null
 # * Fix: Random now works correctly
-#:0.3.3:2013-08-16:go2null
-# * Code cleanup
+VERSION=0.3.3:2013-08-16:go2null
+# * NEW: INSTALL option
+# * NEW: HELP option
+# * FIX: always use /bin/kill, not bash's built-in kill
 
 # ** inspirations ** #
 # http://ubuntuforums.org/showthread.php?t=2076417
@@ -29,10 +31,31 @@ DIR_3='/usr/share/backgrounds'
 DIR_4='/usr/share/lxde/wallpapers'
 # how often to change wallpaper
 INTERVAL='5m'
-# use a random image?
-RANDOM=0
+# uncomment to use a random image
+#RANDOM=RANDOM
 
 # ** HELPER FUNCTIONS ** #
+printHelp() {
+	echo "VERSION: $VERSION
+USAGE:
+	"$0" [OPTIONS]
+OPTIONS
+	* install [random] [start|restart]
+	* start|restart [random]
+	* stop
+	* next|prev|random|<full-path-to-image>
+	* help
+"
+}
+
+killPIDs() {
+	[ "$1" = "keep1" ] && { shift 2 2>/dev/null; }
+	while [ -n "$1"]; do
+		/bin/kill -9 $1
+		shift
+	done
+}
+
 getDM() {
 # ** get desktop manager ** #
 	DM='PCMANFM'
@@ -71,31 +94,67 @@ setWallpaper() {
 # command-line overrides
 while [ $# -gt 0 ]; do
 	case "$1" in
-		r|R|random|RANDOM)				 RANDOM=1         ;;
-		n|N|next|NEXT)					 ACTION='NEXT'    ;;
-		p|P|prev|PREV|previous|PREVIOUS) ACTION='PREV'    ;;
-		start|START)                     ACTION='START'   ;;
-		stop|STOP)                       ACTION='STOP'    ;;
-		restart|RESTART)                 ACTION='RESTART' ;;
-		*)	[ -f "$1" ]               && ACTION=$1        ;;
+		install|INSTALL)                 INSTALL='INSTALL' ;;
+		r|R|random|RANDOM)				 RANDOM='RANDOM'   ;;
+		n|N|next|NEXT)					 ACTION='NEXT'     ;;
+		p|P|prev|PREV|previous|PREVIOUS) ACTION='PREV'     ;;
+		start|START)                     ACTION='START'    ;;
+		stop|STOP)                       ACTION='STOP'     ;;
+		restart|RESTART)                 ACTION='RESTART'  ;;
+		*) [ -f "$1" ] && { ACTION=$1; } || { printHelp; exit; } ;; # stop at unknown option
 	esac
 	shift
 done
-[ -z "$ACTION" ] && ACTION='START'
+# validate and init variiables
+[ -z "$RANDOM"  ] || { [ "$RANDOM"  != "RANDOM"  ] && unset RANDOM;   }
+[ -z "$INSTALL" ] || { [ "$INSTALL" != "INSTALL" ] && unset INSTALL;  }
+([ -z "$INSTALL" ] && [ -z "$ACTION" ]) && { [ -n "$RANDOM" ] && ACTION='RANDOM' || ACTION='START'; }
 
 # ** execute START/STOP/RESTART actions ** #
 # get PID if already running
 #   https://bbs.archlinux.org/viewtopic.php?id=77395
-PID=$(pgrep -c -f "/bin/sh $0")
-if [ "$PID" -gt 0 ]; then
-	[ "$ACTION" = "START"   ] && exit # already running
-    [ "$ACTION" = "STOP"    ] && kill -9 $PID
-	[ "$ACTION" = "RESTART" ] && kill -9 $PID
+PIDs=$(pgrep -f "/bin/sh $0")
+if [ -n "$PID" ]; then
+	([ -z "$INSTALL" ] && [ "$ACTION" = "START" ]) && { killPIDs 'keep1' "$PIDs"; exit; }
+	([ -n "$INSTALL" ] || [ "$ACTION" = "STOP" ] || [ "$ACTION" = "RESTART" ]) && { killPIDs "$PIDs"; } 
 fi
-[ "$ACTION" = "STOP" ] && exit
+[ "$ACTION" = "STOP"    ] && exit
+[ "$ACTION" = "RESTART" ] && ACTION='START' # simplifies checks later
+
+# ** get Desktop specific commands ** #
+getDM
+
+# ** execute INSTALL action ** #
+if [ -n "$INSTALL" ]; then
+	# get autostart directory
+	case "$DM" in
+		PCMANFM)
+			DESKTOP=$HOME/.config/autostart	
+			;;
+	esac
+	# set desktop file target
+	DESKTOP="$DESKTOP/$(basename $0).desktop"
+	# create desktop file
+	cat <<EOF > "$DESKTOP"
+[Desktop Entry]
+Encoding=UTF-8
+Type=Application
+Name=Wallpaper Rotator
+Name[en_US]=Wallpaper Rotator
+Icon=wallpaper
+Exec=$0 $RANDOM
+Comment[en_US]=Rotates wallpapers sequentially or randomly
+StartupNotify=true
+Version=1.0
+Terminal=false
+Categories=Utility;
+EOF
+	chmod a+x "$DESKTOP"
+	[ "$ACTION" = "INSTALL" ] && exit
+fi
 
 # ** generate file list, only on START, or if it doesn't exist ** #
-WP_LIST=/tmp/$(basename -s -sh "$0").lst
+WP_LIST=/tmp/$(basename -s '.sh' "$0").lst
 if [ "$ACTION" = "START" ] || [ ! -f "$WP_LIST" ]; then
 	rm -f "$WP_LIST"
 	COUNTER=1
@@ -107,27 +166,19 @@ if [ "$ACTION" = "START" ] || [ ! -f "$WP_LIST" ]; then
 	done
 fi
 
-# ** get Desktop specific commands ** #
-getDM
-
-# ** execute file/NEXT/PREV actions ** #
+# ** execute file/NEXT/PREV/RANDOM actions ** #
 # get file to use
-[ -f "$ACTION" ]       && WP_NEW=$ACTION
-[ "$ACTION" = "NEXT" ] && { getCurrentWallpaper; getNextWallpaper; }
-[ "$ACTION" = "PREV" ] && { getCurrentWallpaper; getPrevWallpaper; }
-# set wallpaper
-if [ ! -z "$WP_NEW" ]; then
-	setWallpaper
-    exit
+if   [ -f "$ACTION"         ]; then { WP_NEW=$ACTION;                        }
+elif [ "$ACTION" = "RANDOM" ]; then { WP_NEW=$(shuf -n1 < "$WP_LIST");       }
+elif [ "$ACTION" = "NEXT"   ]; then { getCurrentWallpaper; getNextWallpaper; }
+elif [ "$ACTION" = "PREV"   ]; then { getCurrentWallpaper; getPrevWallpaper; }
 fi
+# set wallpaper
+[ -n "$WP_NEW" ] && { setWallpaper; exit; }
 
 # ** rotate ** #
 while true; do
-	if [ "$RANDOM" -ne 0 ]; then
-		WP_NEW=$(shuf -n1 < "$WP_LIST")
-	else
-		getNextWallpaper
-	fi
+	[ -n "$RANDOM" ] && { WP_NEW=$(shuf -n1 < "$WP_LIST"); } || { getNextWallpaper; }
 	setWallpaper
 	sleep $INTERVAL
 done
