@@ -15,6 +15,8 @@ VERSION=0.3.1:2013-07-25:go2null
 VERSION=0.3.2:2013-07-25:go2null
 # * Fix: Random now works correctly
 VERSION=0.3.3:2013-08-16:go2null
+# * MOD: code cleanup
+VERSION=0.4.0:2013-08-18:go2null
 # * NEW: INSTALL option
 # * NEW: HELP option
 # * FIX: always use /bin/kill, not bash's built-in kill
@@ -26,11 +28,11 @@ VERSION=0.3.3:2013-08-16:go2null
 # ** USER SETTINGS ** #
 # directories to use
 DIR_1="~/Wallpaper/"
-DIR_2='/home/Public/Pictures'
-DIR_3='/usr/share/backgrounds'
-DIR_4='/usr/share/lxde/wallpapers'
+DIR_2='/home/Public/Pictures/'
+DIR_3='/usr/share/backgrounds/'
+DIR_4='/usr/share/lxde/wallpapers/'
 # how often to change wallpaper
-INTERVAL='5m'
+INTERVAL='1m'
 # uncomment to use a random image
 #RANDOM=RANDOM
 
@@ -49,11 +51,8 @@ OPTIONS
 }
 
 killPIDs() {
-	[ "$1" = "keep1" ] && { shift 2 2>/dev/null; }
-	while [ -n "$1"]; do
-		/bin/kill -9 $1
-		shift
-	done
+	[ "$1" = "keep1" ] && { shift 2; } # 2>/dev/null; }
+	[ -n "$1" ] && { /bin/kill -9 $*; }
 }
 
 getDM() {
@@ -108,15 +107,17 @@ done
 # validate and init variiables
 [ -z "$RANDOM"  ] || { [ "$RANDOM"  != "RANDOM"  ] && unset RANDOM;   }
 [ -z "$INSTALL" ] || { [ "$INSTALL" != "INSTALL" ] && unset INSTALL;  }
+# set default action, if none specified
 ([ -z "$INSTALL" ] && [ -z "$ACTION" ]) && { [ -n "$RANDOM" ] && ACTION='RANDOM' || ACTION='START'; }
 
 # ** execute START/STOP/RESTART actions ** #
 # get PID if already running
 #   https://bbs.archlinux.org/viewtopic.php?id=77395
-PIDs=$(pgrep -f "/bin/sh $0")
-if [ -n "$PID" ]; then
-	([ -z "$INSTALL" ] && [ "$ACTION" = "START" ]) && { killPIDs 'keep1' "$PIDs"; exit; }
-	([ -n "$INSTALL" ] || [ "$ACTION" = "STOP" ] || [ "$ACTION" = "RESTART" ]) && { killPIDs "$PIDs"; } 
+#   http://stackoverflow.com/questions/15740481/prevent-process-from-killing-itself-using-pkill
+PIDs=$(pgrep -fx ".*sh.*wallpaper-rotator" | grep -v ^$$\$)
+if [ -n "$PIDs" ]; then
+	([ -z "$INSTALL" ] && [ "$ACTION" = "START" ]) && { killPIDs 'keep1' $PIDs; exit; }
+	([ -n "$INSTALL" ] || [ "$ACTION" = "STOP" ] || [ "$ACTION" = "RESTART" ]) && { killPIDs $PIDs; } 
 fi
 [ "$ACTION" = "STOP"    ] && exit
 [ "$ACTION" = "RESTART" ] && ACTION='START' # simplifies checks later
