@@ -22,6 +22,8 @@ VERSION=0.4.0:2013-08-18:go2null
 # * FIX: always use /bin/kill, not bash's built-in kill
 VERSION=0.4.1:2013-08-18:go2null
 # * FIX: START always executes on INSTALL
+VERSION=0.4.2:2013-08-18:go2null
+# * FIX: Always exits with START
 
 # ** inspirations ** #
 # http://ubuntuforums.org/showthread.php?t=2076417
@@ -116,7 +118,10 @@ done
 # get PID if already running
 #   https://bbs.archlinux.org/viewtopic.php?id=77395
 #   http://stackoverflow.com/questions/15740481/prevent-process-from-killing-itself-using-pkill
-PIDs=$(pgrep -fx ".*sh.*wallpaper-rotator" | grep -v ^$$\$)
+#	http://stackoverflow.com/questions/5615570/in-a-script-vs-in-a-subshellhttp://stackoverflow.com/questions/5615570/in-a-script-vs-in-a-subshell
+PIDs=$(read -r SUBSHELL_PID _ < /proc/self/stat; 
+	pgrep -fx ".*sh .*wallpaper-rotator" | 
+	grep -vx -e "^$$\$" -e "^$SUBSHELL_PID\$")
 if [ -n "$PIDs" ]; then
 	([ -z "$INSTALL" ] && [ "$ACTION" = "START" ]) && { killPIDs 'keep1' $PIDs; exit; }
 	([ -n "$INSTALL" ] || [ "$ACTION" = "STOP" ] || [ "$ACTION" = "RESTART" ]) && { killPIDs $PIDs; } 
