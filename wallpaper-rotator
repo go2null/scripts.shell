@@ -24,6 +24,8 @@ VERSION=0.4.1:2013-08-18:go2null
 # * FIX: START always executes on INSTALL
 VERSION=0.4.2:2013-08-18:go2null
 # * FIX: Always exits with START
+VERSION=0.4.3:2013-08-18:go2null
+# * NEW: Added new menu entries
 
 # ** inspirations ** #
 # http://ubuntuforums.org/showthread.php?t=2076417
@@ -62,6 +64,7 @@ killPIDs() {
 getDM() {
 # ** get desktop manager ** #
 	DM='PCMANFM'
+	# sets wallpaper for current desktop
 	DM_SET_WP='pcmanfm --set-wallpaper'
 }
 
@@ -155,7 +158,7 @@ Comment[en_US]=Rotates wallpapers sequentially or randomly
 StartupNotify=true
 Version=1.0
 Terminal=false
-Categories=Utility;
+Categories=Settings;Utility;DesktopSettings;GTK;
 EOF
 	chmod a+x "$DESKTOP"
 	[ "$ACTION" = "INSTALL" ] && exit
