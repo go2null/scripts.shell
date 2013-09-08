@@ -1,0 +1,73 @@
+#!/bin/sh
+
+# NOTES:
+# * This script will parse CSV files into a format suitable for import into MySQl
+# * The output file (OUT_FILE) will have embedded EOLs (\n on *nix, \r\n on Windows) converted to \n,
+#   true row EOLs (OUT_LINE_DELIM) will be \r\n,
+#   and the field delimiter (FIELD_DELIM) will be retained.  
+# * To accomplish this, the source CSV must confirm to the following rules.
+#	1. FIELD_DELIM must be a character that is not present in the source data.
+#	2. LINE_DELIM is multiple FIELD_DELIMs at the end of a line (EOL) in the CSV.
+#		* This requires just adding a number of empty columns to the source data.
+#			* This caters to have cells with text starting with EOL
+#		* The idea is to be able to accurately identify a true End-Of-Row
+#			from a text blob with embedded EOLs
+#		* This allows having to only identify one character that is not present in the source data.
+#		* The limiting case is the number of valid sequential columns with no data
+#		  that are followed by a column with data that starts with EOL.
+# * Empty lines (with only FIELD_DELIMs) will also be removed.
+
+# ** USER OPTIONS ** 
+
+# IN_FILE options
+IN_FILE_SPEC="$HOME/Downloads/rdq-specs/tab*.csv"
+# TODO Do not have spaces in /path/filenames as they are not handled!
+NUM_HEADER_ROWS=1
+FIELD_DELIM='~'
+IN_LINE_DELIM='~~'
+# OUT_FILE options
+OUT_FILE="$HOME/Desktop/specs.csv"
+OVERWRITE_OUT_FILE=1
+
+# ** DO NOT EDIT BELOW **
+
+# ** RELEASE HISTORY **
+VERSION='0.0.0:2013-09-07:go2null'
+# * Initial release
+
+# script variables
+TEMP_IN_FILE="$(mktemp)"
+TEMP_OUT_FILE="$(mktemp)"
+
+# cat multiple tabs together into a single file
+if [ "$NUM_HEADER_ROWS" -eq 0 ]; then
+	cat $(echo $IN_FILE_SPEC) > "$TEMP_IN_FILE"
+else
+	for FILE in $(echo $IN_FILE_SPEC); do 
+		tail -n '+'$(($NUM_HEADER_ROWS + 1)) "$FILE" >> "$TEMP_IN_FILE"
+	done
+fi
+
+# now for the actual work
+sed \
+	-e '# Replace \r\n with \n
+		s/\r$//' \
+	-e "# Remove empty lines.
+		/^$FIELD_DELIM$FIELD_DELIM*$/d" \
+	-e "# Replace end-of-rows with \r\n.
+		s/$IN_LINE_DELIM$/\r/" \
+	"$TEMP_IN_FILE" > "$TEMP_OUT_FILE"
+
+# write out
+if [ "$OVERWRITE_OUT_FILE" -eq 1 ] && [ -e "$OUT_FILE" ]; then 
+	rm "$OUT_FILE"
+	[ $? -ne 0 ] && { echo "Cannot overwrite '$OUT_FILE'. Data stuck in temp file '$TEMP_OUT_FILE'"; exit 1; }
+fi
+cat "$TEMP_OUT_FILE" >> "$OUT_FILE"
+
+# inform
+echo "'$IN_FILE_SPEC' converted to '$OUT_FILE'"
+
+# cleanup
+rm "$TEMP_IN_FILE"
+rm "$TEMP_OUT_FILE"
