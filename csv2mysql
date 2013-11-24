@@ -1,73 +1,124 @@
 #!/bin/sh
 
-# NOTES:
-# * This script will parse CSV files into a format suitable for import into MySQl
-# * The output file (OUT_FILE) will have embedded EOLs (\n on *nix, \r\n on Windows) converted to \n,
-#   true row EOLs (OUT_LINE_DELIM) will be \r\n,
-#   and the field delimiter (FIELD_DELIM) will be retained.  
-# * To accomplish this, the source CSV must confirm to the following rules.
-#	1. FIELD_DELIM must be a character that is not present in the source data.
-#	2. LINE_DELIM is multiple FIELD_DELIMs at the end of a line (EOL) in the CSV.
-#		* This requires just adding a number of empty columns to the source data.
-#			* This caters to have cells with text starting with EOL
-#		* The idea is to be able to accurately identify a true End-Of-Row
-#			from a text blob with embedded EOLs
-#		* This allows having to only identify one character that is not present in the source data.
-#		* The limiting case is the number of valid sequential columns with no data
-#		  that are followed by a column with data that starts with EOL.
-# * Empty lines (with only FIELD_DELIMs) will also be removed.
-
-# ** USER OPTIONS ** 
-
-# IN_FILE options
-IN_FILE_SPEC="$HOME/Downloads/rdq-specs/tab*.csv"
-# TODO Do not have spaces in /path/filenames as they are not handled!
-NUM_HEADER_ROWS=1
-FIELD_DELIM='~'
-IN_LINE_DELIM='~~'
-# OUT_FILE options
-OUT_FILE="$HOME/Desktop/specs.csv"
-OVERWRITE_OUT_FILE=1
-
-# ** DO NOT EDIT BELOW **
-
 # ** RELEASE HISTORY **
 VERSION='0.0.0:2013-09-07:go2null'
 # * Initial release
+VERSION='0.1.0:2013-09-11:go2null'
+# * Added command line options support
+
+doCleanup() {
+	rm -f "$TEMP_IN_FILE"
+	rm -f "$TEMP_OUT_FILE"
+}
+
+printHelp() {
+printf %s "\
+VERSION
+  $VERSION
+
+USAGE
+  $(basename $0) -i FILE_SPEC [-n #] -f STRING [-l STRING] [-o FILENAME] [-a]
+
+OPTIONS
+  -a            - Append to out-file.  Default is to overwrite. 
+  -f STRING     - Field delimiter.
+  -h, --help    - Display this help screen and exit
+  -i FILE_SPEC  - Filespec of in-files. If includes wildcards, must enclose in single quotes.
+  -l STRING     - STRING to use as end-of-record (end-of-row).  Default is '<Field Demiliter>\n'.
+  -n #          - Number of header rows.  Default is 1.
+  -o FILENAME   - Out-file.  Default is 'out.csv'.
+  -v, --version - Display version info and exit
+
+DESCRIPTION
+* This script will parse CSV files into a format suitable for import into MySQl, etc.
+* The output file will have embedded End-Of-Lines (\n on *nix, \r\n on Windows) converted to \n,
+  true row EOLs will be \r\n,
+  and the field delimiter will be retained.  
+* To accomplish this, in the source CSV,
+  1. the field delimiter must be a character/string that is not present in the source data.
+  2. the line delimiter can simply be multiple field delimiters at the end of a line (EOL) in the CSV.
+     * Easily done by adding a number of empty rightmost columns to the source data.)
+     * The limiting case is the number of valid sequential columns with no data
+       that are followed by a column with data that starts with EOL.
+* The idea is to be able to accurately identify a true End-Of-Row
+  from a text blob with embedded EOLs
+* This allows having to only identify one character that is not present in the source data.
+* Empty lines (with only field delimters) are also removed by default.
+
+EXAMPLE
+  $(basename $0) -i 'tab*.csv' -f ~
+    This reads in all tab*.csv files, 
+	  ignores line 1 as a header row, 
+	  removes empty rows,
+	  treats '~EOL' as line delimter,
+	  writes concatenated files into 'out.csv' with \r\n as line delimter.
+"
+}
+
+
+# get input options
+while [ $# -gt 0 ]; do
+	case "$1" in
+		'-a')             OVERWRITE_OUT_FILE=0         ;;
+		'-f')             FIELD_DELIM="$2"             ;;
+		'-h'|'--help')    { printHelp;         exit; } ;;
+		'-i')             IN_FILE_SPEC="$2"            ;;
+		'-l')             LINE_DELIM="$2"              ;;
+		'-n')             NUM_HEADER_ROWS="$2"         ;;
+		'-o')             OUT_FILE="$2"                ;;
+		'-v'|'--version') { echo "$VERSION";   exit; } ;;
+	esac
+	shift
+done
+
+# validate options
+[ -z "$FIELD_DELIM"  ] && { echo 'ERROR: Field delimiter not specified.\n'>&2; printHelp; exit 1; }
+[ -z "$IN_FILE_SPEC" ] && { echo 'ERROR: Input file(s) not specified.\n'  >&2; printHelp; exit 1; }
+
+# init optional vars
+${LINE_DELIM:="$FIELD_DELIM\r"} 2>/dev/null
+${NUM_HEADER_ROWS:=1}           2>/dev/null
+${OUT_FILE:='out.csv'}          2>/dev/null
+${OVERWRITE_OUT_FILE:=1}        2>/dev/null
 
 # script variables
 TEMP_IN_FILE="$(mktemp)"
 TEMP_OUT_FILE="$(mktemp)"
+trap doCleanup EXIT
 
-# cat multiple tabs together into a single file
+# concat multiple input files together into a single file
 if [ "$NUM_HEADER_ROWS" -eq 0 ]; then
-	cat $(echo $IN_FILE_SPEC) > "$TEMP_IN_FILE"
+	if ! cat $IN_FILE_SPEC > "$TEMP_IN_FILE"; then
+		echo "ERROR: Failed to read in-files '$IN_FILE_SPEC'." >&2
+		exit 1
+	fi
 else
-	for FILE in $(echo $IN_FILE_SPEC); do 
-		tail -n '+'$(($NUM_HEADER_ROWS + 1)) "$FILE" >> "$TEMP_IN_FILE"
+	for FILE in $IN_FILE_SPEC; do 
+		if ! tail -n '+'$(($NUM_HEADER_ROWS + 1)) "$FILE" >> "$TEMP_IN_FILE"; then
+			echo "ERROR: Failed to read in-file '$FILE'." >&2
+			exit 1
+		fi
 	done
 fi
 
 # now for the actual work
 sed \
 	-e '# Replace \r\n with \n
-		s/\r$//' \
+		s/\r$//'                                   \
 	-e "# Remove empty lines.
-		/^$FIELD_DELIM$FIELD_DELIM*$/d" \
+		/^$FIELD_DELIM$FIELD_DELIM*$LINE_DELIM$/d" \
 	-e "# Replace end-of-rows with \r\n.
-		s/$IN_LINE_DELIM$/\r/" \
+		s/$LINE_DELIM$/\r/"                        \
 	"$TEMP_IN_FILE" > "$TEMP_OUT_FILE"
 
 # write out
 if [ "$OVERWRITE_OUT_FILE" -eq 1 ] && [ -e "$OUT_FILE" ]; then 
-	rm "$OUT_FILE"
-	[ $? -ne 0 ] && { echo "Cannot overwrite '$OUT_FILE'. Data stuck in temp file '$TEMP_OUT_FILE'"; exit 1; }
+	if ! rm "$OUT_FILE"; then
+		echo "ERROR: Cannot overwrite '$OUT_FILE'. Data stuck in temp file '$TEMP_OUT_FILE'" >&2
+		exit 1
+	fi
 fi
 cat "$TEMP_OUT_FILE" >> "$OUT_FILE"
 
 # inform
 echo "'$IN_FILE_SPEC' converted to '$OUT_FILE'"
-
-# cleanup
-rm "$TEMP_IN_FILE"
-rm "$TEMP_OUT_FILE"
