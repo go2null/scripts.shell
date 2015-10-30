@@ -1,0 +1,61 @@
+#!/bin/sh
+
+# Default options
+REMOTES='refs/remotes'
+BRANCHES='refs/heads'
+TAGS='refs/tags'
+SORT='-committerdate'
+SUBJECT='%s %C(yellow)[%an]'
+# descend into submodules of current repo
+DESCEND_SUBMODULES=1
+# descend into submodules of submodules of this repo
+RECURSIVE='--recursive'
+unset IS_RECURSION
+
+# parse command-line overrides
+COMMAND_LINE=$@
+while [ $# -gt 0 ]; do
+	case "$1" in
+  	--remotes)                REMOTES='refs/remotes';;
+  	--no-remotes)             unset REMOTES;;
+ 		--branches)               BRANCHES='refs/heads';;
+		--no-branches)            unset BRANCHES;;
+		--tags)                   TAGS='refs/tags';;
+		--no-tags)                unset TAGS;;
+		--sort)                   SORT=$2; shift;;
+		--subject)                SUBJECT='%s %C(yellow)[%an]';;
+		--no-subject)             unset SUBJECT;;
+		--descend-submodules)     DESCEND_SUBMODULES=1;;
+		--no-descend-submodules)  unset DESCEND_SUBMODULES;;
+		--recurse-submodules)     RECURSIVE='--recursive';;
+		--no-recurse-submodules)  unset RECURSIVE;;
+		is_recursion)             IS_RECURSION=1;;
+	esac
+	shift
+done
+
+# colors
+# text-decoration
+T_NORMAL='\033[0m'
+T_BOLD='\033[1m'
+
+if [ "$IS_RECURSION" = '1' ]; then
+	printf "${T_NORMAL}"
+else
+	printf "${T_BOLD}%s${T_NORMAL}\n" "$PWD"
+fi
+
+# cannot pipe to 'sort --unique --reverse'
+# as it will sort two commits on the same day by the hash,
+# and so loose the date order
+for REF in $(git for-each-ref --sort=$SORT --format="%(objectname)" $REMOTES $BRANCHES $TAGS); do
+	if [ "$PREV_REF" != "$REF" ]; then
+		PREV_REF=$REF
+		git log -n1 $REF --date=short --pretty=format:"%C(auto)%ad %h%d $SUBJECT%C(reset)"
+	fi
+done
+
+if [ "$DESCEND_SUBMODULES" == "1" ]; then
+	printf "\n${T_BOLD}"
+	git submodule foreach $RECURSIVE "$0 is_recursion $COMMAND_LINE"
+fi

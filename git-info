@@ -1,0 +1,109 @@
+#!/bin/sh
+
+# colors
+# http://www.bashguru.com/2010/01/shell-colors-colorizing-shell-scripts.html
+# http://www.pix:elbeat.org/docs/terminal_colours/
+# background-color
+B_BLACK='\033[40m'
+B_BLUE='\033[44m'
+B_BROWN='\033[43m'
+B_CYAN='\033[46m'
+B_GREEN='\033[42m'
+B_MAGENTA='\033[45m'
+B_RED='\033[41m'
+B_WHITE='\033[47m'
+# (foreground) color
+F_BLACK='\033[0;30m'
+F_BLUE='\033[0;34m'
+F_BROWN='\033[0;33m'
+F_CYAN='\033[0;36m'
+F_DARK_BLUE='\033[1;34m'
+F_DARK_CYAN='\033[1;36m'
+F_DARK_GRAY='\033[1;30m'
+F_DARK_GREEN='\033[1;32m'
+F_DARK_MAGENTA='\033[1;35m'
+F_DARK_RED='\033[1;31m'
+F_GREEN='\033[0;32m'
+F_LIGHT_GRAY='\033[0;37m'
+F_MAGENTA='\033[0;35m'
+F_RED='\033[0;31m'
+F_WHITE='\033[1;37m'
+F_YELLOW='\033[1;33m'
+# text-decoration
+T_NORMAL='\033[0m'
+T_BOLD='\033[1m'
+T_UNDERLINE='\033[4m'
+T_BLINK='\033[5m'
+T_REVERSE='\033[7m'
+
+# Default options
+# remotes are included in config
+REMOTES=0
+BRANCHES=1
+TAGS=1
+CONFIG=1
+# submodules will be descended into
+SUBMODULES=0
+# descend into submodules of current repo
+DESCEND_SUBMODULES=1
+# descend into submodules of submodules of this repo
+RECURSIVE='--recursive'
+unset IS_RECURSION
+
+# parse command-line overrides
+COMMAND_LINE=$@
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--remotes)                REMOTES=1;;
+  	--no-remotes)             REMOTES=0;;
+ 		--branches)               BRANCHES=1;;
+		--no-branches)            BRANCHES=0;;
+		--tags)                   TAGS=1;;
+		--no-tags)                TAGS=0;;
+  	--config)                 CONFIG=1;;
+  	--no-config)              CONFIG=0;;
+		--submodules)             SUBMODULES=1;;
+		--no-submodules)          SUBMODULES=0;;
+		--descend-submodules)     DESCEND_SUBMODULES=1;;
+		--no-descend-submodules)  DESCEND_SUBMODULES=0;;
+		--recurse-submodules)     RECURSIVE='--recursive';;
+		--no-recurse-submodules)  RECURSIVE='';;
+		is_recursion)             IS_RECURSION=1;;
+	esac
+	shift
+done
+
+if [ "$IS_RECURSION" != '1' ]; then
+	printf "${T_BOLD}%s\n" "$PWD"
+fi
+
+# Remotes are included in Config
+if [ "$REMOTES" == "1" ]; then
+	printf "${T_NORMAL}%s\n" '# = REMOTES = #'
+	git remote -v
+fi
+
+if [ "$BRANCHES" == "1" ]; then
+	printf "${T_NORMAL}%s\n" '# = BRANCHES = #'
+	git branch --all
+fi
+
+if [ "$TAGS" == "1" ]; then
+	printf "${T_NORMAL}%s\n" '# = TAGS = #'
+	git tag #| tr '\n' '\t' && echo
+fi
+
+if [ "$CONFIG" == "1" ]; then
+	printf "${T_NORMAL}%s\n" '# = LOCAL CONFIG = #'
+	git config --local --list | sort | column -t -s '='
+fi
+
+if [ "$SUBMODULES" == "1" ]; then
+	printf "${T_NORMAL}%s\n" '# = SUBMODULES = #'
+	git submodule
+fi
+
+if [ "$DESCEND_SUBMODULES" == "1" ]; then
+	printf "\n${T_BOLD}"
+	git submodule foreach $RECURSIVE "$0 is_recursion $COMMAND_LINE"
+fi

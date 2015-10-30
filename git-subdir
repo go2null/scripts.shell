@@ -1,0 +1,32 @@
+#!/bin/sh
+
+# USAGE:
+#  $0 [PARENT-DIRECTORY] [FUNCTION] [ACTION]
+#   PARENT-RECTORY: Default is current directory.
+#   FUNCTION:       Default function is list.
+#   ACTION:         Default action is is list subdirectories.
+
+foreach() {
+	find "$PWD" -mindepth 1 -maxdepth 1 -type d -exec sh -c '
+	ACTION=$1
+	shift
+	for i in "$@"; do
+		printf "%s\n" "$i"
+		[ -z "$ACTION" ] || (cd "$i" && $ACTION)
+	done' sh "$1" {} +
+}
+
+# parse command-line overrides
+if [ ! -z "$1"  -a  -d "$1" ]; then
+	DIR="$1"
+	pushd "$DIR" >/dev/null
+	shift
+fi
+
+case "$1" in
+	foreach)  shift;  foreach "$@"  ;;
+	*)                foreach       ;;
+esac
+
+[ -z "$DIR" ] || popd >/dev/null
+

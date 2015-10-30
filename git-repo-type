@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# RETURNS: submodule|bare|normal|<empty-string>
+
+if [ ! -z "$(git config --local --get core.worktree)" ]; then
+	echo 'submodule'
+else
+	BARE=$(git config --local --get core.bare)
+	case "$BARE" in
+		true)   echo 'bare';;
+		false)  echo 'normal';;
+	esac
+fi
+
+# Similar/references
+# https://git-scm.com/docs/git-filter-branch
+# http://dound.com/2009/04/git-forever-remove-files-or-folders-from-history/
+# https://stackoverflow.com/questions/8083282/how-do-i-remove-a-big-file-wrongly-committed-in-git
+# https://stackoverflow.com/questions/2100907/how-to-remove-delete-a-large-file-from-commit-history-in-git-repository
