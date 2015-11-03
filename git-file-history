@@ -1,62 +1,54 @@
 #!/bin/sh
 
-# ACCEPTS: a file or directory path, in working tree or index
-# RETURNS: move/rename history of the file
+# ACCEPTS: a file (or directory path) in working tree or index
+# RETURNS: coommit history of the file (or all files in directory tree).
 # NOTES:   written to feed git-file-nuke to ensure renames are removed as well.
 
-VERSION='0.0.1+20151030'
+VERSION='0.0.2+20151103'
 
 printHelp() {
 	printf %s "\
-	VERSION: $VERSION
+  VERSION: $VERSION
 
-	USAGE: $(basename $0) [<options>] [--] <path>
+  USAGE: $(basename $0) [<options>] [--] <path>
 
-	OPTIONS
-  -n, --dry-run       - Passed to git-rm
-  -f, --force         - Passed to git-filter-branch and git-rm
-  -d, --delete-backup - Delete backup refs in .git/refs/original
-	-e, --expire        - Expire reflog
-	-p, --prune         - Delete file objects
-  -h, --help          - Display this help screen and exit
-  -v, --version       - Display version info and exit
-  --                  - end of options, path is next
+  OPTIONS
+  -m, --no-modifications - do not show file attributes nor content modifications
+  -n, --name-only        - only display filenames, and only when it changed
+  -h, --help             - Display this help screen and exit
+  -v, --version          - Display version info and exit
+  --                     - end of options, path is next
 
-	DESCRIPTION
-	* WARNING: backup (clone) your repo first!
-	* path = file: destructively remove all versions of the file,
-	  including renames and moves.
-	* path = directory: do file deletion per above,
-	  for every version of every file that ever existed in the directory tree.
-	  (Versions of files that were in the directory,
-	  but were moved elsewhere, are not affected;
-	  only the versions that were in the directory tree are nuked.)
+  DESCRIPTION
+  * WARNING: backup (clone) your repo first!
+  * path = file: list all commits where file changed.
+  * path = directory: lists all commits for all files in its tree.
 
-	EXAMPLES
+  EXAMPLES
   $(basename $0) .ssh/id_rsa
   $(basename $0) Documents/
+  "
+}
 
-	SIMILAR/REFERENCES
-	* https://git-scm.com/docs/git-filter-branch
-	* http://dound.com/2009/04/git-forever-remove-files-or-folders-from-history/
-	* https://stackoverflow.com/questions/8083282/how-do-i-remove-a-big-file-wrongly-committed-in-git
-	* https://stackoverflow.com/questions/2100907/how-to-remove-delete-a-large-file-from-commit-history-in-git-repository
-	* https://github.com/tj/git-extras/blob/master/Commands.md#git-obliterate
-	"
+directory_paths() {
+	git log --follow --all --format='//%h//' --name-only -- "$FILE_PATH" \
+	| sed -e ':a;N;$!ba;s:\n\n::g'                                       \
+	| grep -v '^//'                                                      \
+	| uniq
 }
 
 file_history() {
 	git log --follow --all --format='%ad %h%x09%s%x09%an' --date='short' --name-status -- "$FILE_PATH" \
 		| sed -e ':a;N;$!ba;s_\n\n_\t_g'                                                                 \
-		| sed -e 's_^\(.*\)\t\(.*\)\t\(.*\)\t\(.\)[0-9]*\t\(.*\)_\4 \1 [\3] "\5" "\2"_'                    \
+		| sed -e 's_^\(.*\)\t\(.*\)\t\(.*\)\t\(.\)[0-9]*\t\(.*\)_\4 \1 [\3] "\5" "\2"_'                  \
 		      -e 's_\t_" -> "_'
 }
 
 # get input options
 while [ $# -gt 0 ]; do
 	case "$1" in
-		'-n'|'--name-only'       ) NAME_ONLY=1                   ;;
-		'-m'|'--no-modifications') NO_MODIFICATIONS=1            ;;
+		'-n'|'--name-only'       ) NAME_ONLY='-n'                ;;
+		'-m'|'--no-modifications') NO_MODIFICATIONS='-m'         ;;
 		'-h'|'--help'            ) { printHelp;         exit;  } ;;
 		'-v'|'--version'         ) { echo "$VERSION";   exit;  } ;;
 		'--'                     ) { FILE_PATH="$2";    break; } ;;
@@ -66,27 +58,36 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$FILE_PATH" ]; then
-	printf '%s\n' 'Provide a filename to lookup. See "--help".' 1>&2
+	printf '%s\n' 'Provide a path to lookup. See "--help".' 1>&2
 	exit 1
 fi
 
-if [ -z "$NAME_ONLY" ]; then
+# if path is directory, recursively call self for each file
+DIRECTORY_PATHS="$(directory_paths)"
+if [ "$DIRECTORY_PATHS" ]; then
+	OLD_IFS="$IFS"
+	IFS="
+"
+	for P in $DIRECTORY_PATHS; do
+		$(basename $0) $NAME_ONLY $NO_MODIFICATIONS -- "$P"
+	done
+	IFS="$OLD_IFS"
+
+elif [ -z "$NAME_ONLY" ]; then
 	if [ -z "$NO_MODIFICATIONS" ]; then
 		file_history
 	else
 		file_history | grep -v '^M'
 	fi
-#	git log --follow --all --format='%ad %h%x09%s%x09%an' --date='short' --name-status -- "$FILE_PATH" \
-#		| sed -e ':a;N;$!ba;s_\n\n_\t_g'                                                                 \
-#		| sed -e 's_^\(.*\)\t\(.*\)\t\(.*\)\t\(.\)[0-9]*\t\(.*\)_\4 \1 [\3] \5 "\2"_'                    \
-#		      -e 's_\t_ -> _'
+
 else
-	git log --follow --all --format='%h'                                 --name-only   -- "$FILE_PATH" \
-		| sed -e ':a;N;$!ba;s/\n\n/ /g'                                                                  \
-		| cut -d ' ' -f 2-                                                                               \
+	git log --follow --all --format='%h' --name-only -- "$FILE_PATH" \
+		| sed -e ':a;N;$!ba;s/\n\n/ /g'                                \
+		| cut -d ' ' -f 2-                                             \
 		| uniq
 fi
 
 # sed string ripped from:
 # https://stackoverflow.com/questions/13447884/nicely-display-file-rename-history-in-git-log
 # https://stackoverflow.com/questions/1251999/how-can-i-replace-a-newline-n-using-sed
+

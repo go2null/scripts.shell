@@ -1,56 +1,63 @@
 #!/bin/sh
 
-VERSION='0.0.1'
+VERSION='0.0.2+20151103'
 
 printHelp() {
 	printf %s "\
-	VERSION: $VERSION
+  VERSION: $VERSION
 
-	USAGE: $(basename $0) [<options>] [--] <path>
+  USAGE: $(basename $0) [<options>] [--] <path>
 
-	OPTIONS
-  -n, --dry-run       - Passed to git-rm
-  -f, --force         - Passed to git-filter-branch and git-rm
+  OPTIONS
   -d, --delete-backup - Delete backup refs in .git/refs/original
-	-e, --expire        - Expire reflog
-	-p, --prune         - Delete file objects
+  -e, --expire        - Expire reflogger
+  -f, --force         - Passed to git-filter-branch and git-rm
+  -n, --dry-run       - Passed to git-rm
+  -p, --prune         - Delete file objects
   -h, --help          - Display this help screen and exit
   -v, --version       - Display version info and exit
   --                  - end of options, path is next
 
-	DESCRIPTION
-	* WARNING: backup (clone) your repo first!
-	* path = file: destructively remove all versions of the file,
-	  including renames and moves.
-	* path = directory: do file deletion per above,
-	  for every version of every file that ever existed in the directory tree.
-	  (Versions of files that were in the directory,
-	  but were moved elsewhere, are not affected;
-	  only the versions that were in the directory tree are nuked.)
+  DESCRIPTION
+  * WARNING: backup (clone) your repo first!
+  * path = file: destructively remove all versions of the file,
+    including renames and moves.
+  * path = directory: do file deletion per above,
+    for every version of every file that ever existed in the directory tree.
+    (Versions of files that were in the directory,
+    but were moved elsewhere, are not affected;
+    only the versions that were in the directory tree are nuked.)
 
-	EXAMPLES
+  EXAMPLES
   $(basename $0) .ssh/id_rsa
   $(basename $0) Documents/
 
-	SIMILAR/REFERENCES
-	* https://git-scm.com/docs/git-filter-branch
-	* http://dound.com/2009/04/git-forever-remove-files-or-folders-from-history/
-	* https://stackoverflow.com/questions/8083282/how-do-i-remove-a-big-file-wrongly-committed-in-git
-	* https://stackoverflow.com/questions/2100907/how-to-remove-delete-a-large-file-from-commit-history-in-git-repository
-	* https://github.com/tj/git-extras/blob/master/Commands.md#git-obliterate
-	"
+  SIMILAR/REFERENCES
+  * https://git-scm.com/docs/git-filter-branch
+  * http://dound.com/2009/04/git-forever-remove-files-or-folders-from-history/
+  * https://stackoverflow.com/questions/8083282/how-do-i-remove-a-big-file-wrongly-committed-in-git
+  * https://stackoverflow.com/questions/2100907/how-to-remove-delete-a-large-file-from-commit-history-in-git-repository
+  * https://github.com/tj/git-extras/blob/master/Commands.md#git-obliterate
+  "
 }
 
-delete_files() {
+logger() {
+	MESSAGE="$(date +%T): $@"
+	SUMMARY="$SUMMARY
+$MESSAGE"
+	printf '%s\n' "$MESSAGE"
+}
+
+delete_commits() {
 	unset EXIT_CODE
 	OLD_IFS="$IFS"
 	IFS='
 	'
-	for P in $(git-filename-history --name-only -- "$FILE_PATH"); do
-		printf '\n%s\n' "Nuking $FILE_PATH : $P"
+	for P in $($GIT_FILE_HISTORY --name-only -- "$FILE_PATH"); do
+		logger "Nuking $FILE_PATH : $P"
 
 		git filter-branch                                                              \
-			--index-filter "git rm $FORCE -r $DRY_RUN --cached --ignore-unmatch -- '$P'" \
+			--index-filter "git rm $FORCE $DRY_RUN --cached --ignore-unmatch -- '$P'" \
 			--tag-name-filter cat                                                        \
 			--prune-empty                                                                \
 			$FORCE                                                                       \
@@ -68,18 +75,18 @@ delete_files() {
 }
 
 delete_backup() {
-	printf '\n%s\n' "Nuking $FILE_PATH : deleting orignal refs"
+	logger "Nuking $FILE_PATH : deleting orignal refs"
 	git for-each-ref --format="%(refname)" refs/original/ \
 		| xargs -n 1 git update-ref -d
 }
 
-delete_reflog() {
-	printf '\n%s\n' "Nuking $FILE_PATH : deleting reflog"
+delete_reflogger() {
+	logger "Nuking $FILE_PATH : deleting reflog"
 	git reflog expire --expire=now --all
 }
 
 delete_objects() {
-	printf '\n%s\n' "Nuking $FILE_PATH : deleting objects"
+	logger "Nuking $FILE_PATH : deleting objects"
 	git gc --prune=now
 }
 
@@ -94,12 +101,12 @@ unset FILE_PATH
 # get input options
 while [ $# -gt 0 ]; do
 	case "$1" in
-		'-n'|'--dry-run'        ) DRY_RUN='--dry-run'                       ;;
 		'-f'|'--force'          ) FORCE='--force'                           ;;
-		'-h'|'--help'           ) { printHelp;         exit;              } ;;
+		'-n'|'--dry-run'        ) DRY_RUN='--dry-run'                       ;;
 		'-r'|'--remove-original') {                    REMOVE_ORIGINAL=1; } ;;
 		'-e'|'--expire'         ) {          EXPIRE=1; REMOVE_ORIGINAL=1; } ;;
 		'-p'|'--prune'          ) { PRUNE=1; EXPIRE=1; REMOVE_ORIGINAL=1; } ;;
+		'-h'|'--help'           ) { printHelp;         exit;              } ;;
 		'-v'|'--version'        ) { echo "$VERSION";   exit;              } ;;
 		'--'                    ) { FILE_PATH="$2";    break;             } ;;
 		*                       ) FILE_PATH="$1"                            ;;
@@ -112,11 +119,18 @@ if [ -z "$FILE_PATH" ]; then
 	exit 1
 fi
 
-printf '%s\n' "Nuking $FILE_PATH"
+GIT_FILE_HISTORY='git-file-history'
+if ! which $GIT_FILE_HISTORY &>/dev/null; then
+	printf '%s\n' "'$GIT_FILE_HISTORY' is a required dependency. See '--help'." 1>&2
+	exit 1
+fi
 
-delete_files                                 \
+SUMMARY=''
+logger "Nuking $FILE_PATH : Start"
+delete_commits                               \
 	&& [ ! "$DRY_RUN" ]                        \
 	&& [ "$REMOVE_ORIGINAL" ] && delete_backup \
 	&& [ "$EXPIRE"          ] && delete_reflog \
 	&& [ "$PRUNE"           ] && delete_objects
-
+logger "Nuking $FILE_PATH : End"
+printf '%s\n' "$SUMMARY"
