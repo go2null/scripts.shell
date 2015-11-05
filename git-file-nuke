@@ -1,6 +1,6 @@
 #!/bin/sh
 
-VERSION='0.0.2+20151103'
+VERSION='0.0.3+20151104'
 
 printHelp() {
 	printf %s "\
@@ -27,6 +27,7 @@ printHelp() {
     (Versions of files that were in the directory,
     but were moved elsewhere, are not affected;
     only the versions that were in the directory tree are nuked.)
+  * Paths must not contain newline characters.
 
   EXAMPLES
   $(basename $0) .ssh/id_rsa
@@ -51,8 +52,7 @@ $MESSAGE"
 delete_commits() {
 	unset EXIT_CODE
 	OLD_IFS="$IFS"
-	IFS='
-	'
+	IFS=$(printf '\n')
 	for P in $($GIT_FILE_HISTORY --name-only -- "$FILE_PATH"); do
 		logger "Nuking $FILE_PATH : $P"
 
@@ -75,7 +75,7 @@ delete_commits() {
 }
 
 delete_backup() {
-	logger "Nuking $FILE_PATH : deleting orignal refs"
+	logger "Nuking $FILE_PATH : deleting original refs"
 	git for-each-ref --format="%(refname)" refs/original/ \
 		| xargs -n 1 git update-ref -d
 }
