@@ -1,50 +1,31 @@
 #!/bin/sh
 # see https://help.github.com/articles/changing-author-info/
 
-git filter-branch -f --env-filter '
-OLD_NAMES="Old Name
-Bad Name"
+[ -n "$1" ] && new_name="$1"  || exit 1
+[ -n "$2" ] && new_email="$2" || exit 1
 
-CORRECT_NAME="First Last"
-CORRECT_EMAIL="first.last@example.com"
+[ -n "$3" ] && old_name="$3"  || exit 1
+[ -n "$3" ] && old_email="$4" || exit 1
 
-IFS="
-"
-for OLD_NAME in $OLD_NAMES; do
-	OLD_NAME=$(echo $OLD_NAME | tr "[:upper]" "[:lower]")
-	GIT_COMMITTER_NAME=$(echo $GIT_COMMITTER_NAME | tr "[:upper]" "[:lower]")
-  if [ "$GIT_COMMITTER_NAME" == "$OLD_NAME" ]; then
-    export GIT_COMMITTER_NAME="$CORRECT_NAME"
-    export GIT_COMMITTER_NAME="$CORRECT_NAME"
-  fi
-	GIT_AUTHOR_NAME=$(echo $GIT_COMMITTER_NAME | tr "[:upper]" "[:lower]")
-  if [ "$GIT_AUTHOR_NAME" == "$OLD_NAME" ]; then
-    export GIT_AUTHOR_NAME="$CORRECT_NAME"
-    export GIT_AUTHOR_NAME="$CORRECT_NAME"
-  fi
-done
-' --tag-name-filter cat -- --all
-#' --tag-name-filter cat -- --branches --tags
+old_name_lower=$(echo "$old_name"   | tr [:upper:] [:lower:])
+old_email_lower=$(echo "$old_email" | tr [:upper:] [:lower:])
 
 git filter-branch -f --env-filter '
-OLD_EMAILS="bad_email@example.com
-old_email@example.com"
+	git_committer_name=$( echo "$GIT_COMMITTER_NAME"  | tr [:upper:] [:lower:])
+	git_committer_email=$(echo "$GIT_COMMITTER_EMAIL" | tr [:upper:] [:lower:])
+	if   [ "$git_committer_name"  = "'"$old_name_lower"'"  ]
+		&& [ "$git_committer_email" = "'"$old_email_lower"'" ]
+	then
+  	export GIT_COMMITTER_NAME="'"$new_name"'"
+  	export GIT_COMMITTER_EMAIL="'"$new_email"'"
+	fi
 
-CORRECT_NAME="First Last"
-CORRECT_EMAIL="first.last@example.com"
-
-for OLD_EMAIL in $OLD_EMAILS; do
-	OLD_EMAIL=$(echo $OLD_EMAIL | tr "[:upper]" "[:lower]")
-	GIT_COMMITTER_EMAIL=$(echo $GIT_COMMITTER_EMAIL | tr "[:upper]" "[:lower]")
-  if [ "$GIT_COMMITTER_EMAIL" == "$OLD_EMAIL" ]; then
-    export GIT_COMMITTER_NAME="$CORRECT_NAME"
-    export GIT_COMMITTER_EMAIL="$CORRECT_EMAIL"
-  fi
-	GIT_AUTHOR_EMAIL=$(echo $GIT_COMMITTER_EMAIL | tr "[:upper]" "[:lower]")
-  if [ "$GIT_AUTHOR_EMAIL" == "$OLD_EMAIL" ]; then
-    export GIT_AUTHOR_NAME="$CORRECT_NAME"
-    export GIT_AUTHOR_EMAIL="$CORRECT_EMAIL"
-  fi
-done
+	git_author_name=$( echo "$GIT_AUTHOR_NAME"  | tr [:upper:] [:lower:])
+	git_author_email=$(echo "$GIT_AUTHOR_EMAIL" | tr [:upper:] [:lower:])
+	if   [ "$git_author_name"  = "'"$old_name_lower"'"  ]
+		&& [ "$git_author_email" = "'"$old_email_lower"'" ]
+	then
+  	export GIT_AUTHOR_NAME="'"$new_name"'"
+  	export GIT_AUTHOR_EMAIL="'"$new_email"'"
+	fi
 ' --tag-name-filter cat -- --all
-#' --tag-name-filter cat -- --branches --tags
