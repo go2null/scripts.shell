@@ -1,21 +1,24 @@
 #!/bin/sh
 
-VERSION='0.0.3+20151104'
+version='0.0.4+20151109'
 
 printHelp() {
 	printf %s "\
-  VERSION: $VERSION
+  VERSION: $version
 
-  USAGE: $(basename $0) [<options>] [--] <path>
+  USAGE: $(basename -- $0) [<options>] [--] <path>
 
   OPTIONS
-  -d, --delete-backup - Delete backup refs in .git/refs/original
-  -e, --expire        - Expire reflogger
+  -d, --directory     - Passed to git-filter-branch
   -f, --force         - Passed to git-filter-branch and git-rm
   -n, --dry-run       - Passed to git-rm
+  -r, --remove-backup - Delete backup refs in .git/refs/original
+  -e, --expire        - Expire reflogger
+  -s, --summary       - Show summary
   -p, --prune         - Delete file objects
+  -v, --verbose       - Verbose mode
   -h, --help          - Display this help screen and exit
-  -v, --version       - Display version info and exit
+  -V, --version       - Display version info and exit
   --                  - end of options, path is next
 
   DESCRIPTION
@@ -27,11 +30,12 @@ printHelp() {
     (Versions of files that were in the directory,
     but were moved elsewhere, are not affected;
     only the versions that were in the directory tree are nuked.)
+    - Include '/' suffix to indicate directory.
   * Paths must not contain newline characters.
 
   EXAMPLES
-  $(basename $0) .ssh/id_rsa
-  $(basename $0) Documents/
+  $(basename -- $0) .ssh/id_rsa
+  $(basename -- $0) Documents/
 
   SIMILAR/REFERENCES
   * https://git-scm.com/docs/git-filter-branch
@@ -42,95 +46,161 @@ printHelp() {
   "
 }
 
+mktemp_file() {
+	mktemp -q -t "$(basename -- "$0").XXXXXX" 2>/dev/null || mktemp -q
+}
+
+is_directory() {
+	if [ "$1" ]; then
+		[ "${1%/}" != "$1" ] && return 0 || return 1
+	else
+		return 2
+	fi
+}
+
 logger() {
-	MESSAGE="$(date +%T): $@"
-	SUMMARY="$SUMMARY
-$MESSAGE"
-	printf '%s\n' "$MESSAGE"
+	message="$(date +%T): $@"
+	[ -n "$summary" ] && log_summary="$log_summary
+$message"
+	printf '%s\n' "$message"
+}
+
+git_filter_branch() {
+	if [ "$1" = '-r' ]; then
+		recursive='-r'
+		shift
+	fi
+
+	git filter-branch                                                                      \
+		--index-filter "git rm $force $dry_run --cached --ignore-unmatch $recursive -- '$1'" \
+		--tag-name-filter cat                                                                \
+		--prune-empty                                                                        \
+		$directory                                                                           \
+		$force                                                                               \
+  	--                                                                                   \
+		--all
 }
 
 delete_commits() {
-	unset EXIT_CODE
-	OLD_IFS="$IFS"
-	IFS=$(printf '\n')
-	for P in $($GIT_FILE_HISTORY --name-only -- "$FILE_PATH"); do
-		logger "Nuking $FILE_PATH : $P"
+	unset exit_code
 
-		git filter-branch                                                              \
-			--index-filter "git rm $FORCE $DRY_RUN --cached --ignore-unmatch -- '$P'" \
-			--tag-name-filter cat                                                        \
-			--prune-empty                                                                \
-			$FORCE                                                                       \
-	  	--                                                                           \
-			--all
+	logger "Nuking $path_name : building file list to catch moves/renames"
+	temp_file="$(mktemp_file)"
+	if [ "$verbose" ]; then
+		"$git_file_history" --name-only -- "$path_name" | tee "$temp_file"
+	else
+		"$git_file_history" --name-only -- "$path_name" >     "$temp_file"
+	fi
+
+	# check if is directory, and use directory name for filter-branch as
+	# it should be much faster than file-by-file.
+	# then can do the file-by-file to handle remaining moves/renames.
+	if is_directory "$path_name"; then
+		logger "Nuking $path_name"
+		git_filter_branch '-r' "$path_name"
+		grep -v "^$path_name" "$temp_file" > "${temp_file}.tmp" \
+			&& mv "${temp_file}.tmp" "$temp_file"
+	fi
+
+	while read -r line; do
+		# skip empty lines (sometimes there are a few at the beginning)
+		[ "$line" ] || continue
+
+		logger "Nuking $path_name : $line"
+		git_filter_branch "$path_name"
 		if [ $? -ne 0 ]; then
-			EXIT_CODE=$?
+			exit_code=$?
 			break
 		fi
-	done
-	[ "$EXIT_CODE" ] || EXIT_CODE=$?
-	IFS="$OLD_IFS"
+	done < "$temp_file"
 
-	return $EXIT_CODE
+	[ "$exit_code" ] || exit_code=$?
+	rm -f "$temp_file"
+	return $exit_code
 }
 
 delete_backup() {
-	logger "Nuking $FILE_PATH : deleting original refs"
+	logger "Nuking $path_name : deleting backup"
 	git for-each-ref --format="%(refname)" refs/original/ \
 		| xargs -n 1 git update-ref -d
 }
 
 delete_reflogger() {
-	logger "Nuking $FILE_PATH : deleting reflog"
+	logger "Nuking $path_name : deleting reflog"
 	git reflog expire --expire=now --all
 }
 
 delete_objects() {
-	logger "Nuking $FILE_PATH : deleting objects"
+	logger "Nuking $path_name : deleting objects"
 	git gc --prune=now
 }
 
-# Defaults
-unset DRY_RUN
-unset FORCE
-unset REMOVE_ORIGINAL
-unset EXPIRE
-unset PRUNE
-unset FILE_PATH
+parse_args() {
+	# defaults
+	unset directory
+	unset force
+	unset dry_run
+	unset remove_backup
+	unset expire
+	unset prune
+	unset summary
+	unset verbose
+	unset path_name
 
-# get input options
-while [ $# -gt 0 ]; do
-	case "$1" in
-		'-f'|'--force'          ) FORCE='--force'                           ;;
-		'-n'|'--dry-run'        ) DRY_RUN='--dry-run'                       ;;
-		'-r'|'--remove-original') {                    REMOVE_ORIGINAL=1; } ;;
-		'-e'|'--expire'         ) {          EXPIRE=1; REMOVE_ORIGINAL=1; } ;;
-		'-p'|'--prune'          ) { PRUNE=1; EXPIRE=1; REMOVE_ORIGINAL=1; } ;;
-		'-h'|'--help'           ) { printHelp;         exit;              } ;;
-		'-v'|'--version'        ) { echo "$VERSION";   exit;              } ;;
-		'--'                    ) { FILE_PATH="$2";    break;             } ;;
-		*                       ) FILE_PATH="$1"                            ;;
-	esac
-	shift
-done
+	# get input options
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			'-d'|'--directory'      ) directory="$2";      shift;             ;;
+			'-f'|'--force'          ) force='--force'                         ;;
+			'-n'|'--dry-run'        ) dry_run='--dry-run'                     ;;
+			'-r'|'--remove-backup'  ) {                    remove_backup=1; } ;;
+			'-e'|'--expire'         ) {          expire=1; remove_backup=1; } ;;
+			'-p'|'--prune'          ) { prune=1; expire=1; remove_backup=1; } ;;
+			'-s'|'--summary'        ) summary=1                               ;;
+			'-v'|'--verbose'        ) verbose='--verbose'                     ;;
+			'-h'|'--help'           ) { printHelp;         exit;            } ;;
+			'-V'|'--version'        ) { echo "$version";   exit;            } ;;
+			'--'                    ) { path_name="$2";    break;           } ;;
+			*                       ) { path_name="$1";    break;           } ;;
+		esac
+		shift
+	done
 
-if [ -z "$FILE_PATH" ]; then
-	printf '%s\n' 'Provide a filename to lookup. See "--help".' 1>&2
-	exit 1
-fi
+	if [ -z "$path_name" ]; then
+		printf '%s\n' 'Provide a filename to lookup. See "--help".' >&2
+		exit 1
+	fi
 
-GIT_FILE_HISTORY='git-file-history'
-if ! which $GIT_FILE_HISTORY &>/dev/null; then
-	printf '%s\n' "'$GIT_FILE_HISTORY' is a required dependency. See '--help'." 1>&2
-	exit 1
-fi
+	if [ "$directory" ]; then
+		if [ -d "$directory" ] && [ -w "$directory" ]; then
+			directory="-d '$directory'"
+		else
+			unset directory
+		fi
+	fi
+}
 
-SUMMARY=''
-logger "Nuking $FILE_PATH : Start"
-delete_commits                               \
-	&& [ ! "$DRY_RUN" ]                        \
-	&& [ "$REMOVE_ORIGINAL" ] && delete_backup \
-	&& [ "$EXPIRE"          ] && delete_reflog \
-	&& [ "$PRUNE"           ] && delete_objects
-logger "Nuking $FILE_PATH : End"
-printf '%s\n' "$SUMMARY"
+check_depends() {
+	git_file_history='git-file-history'
+	if ! which $git_file_history >/dev/null 2>&1; then
+		printf '%s\n' "'$git_file_history' is a required dependency. See '--help'." >&2
+		exit 1
+	fi
+}
+
+main() {
+	log_summary=''
+	logger "Nuking $path_name : Start"
+	delete_commits                               \
+		&& [ -z "$dry_run"      ]                  \
+		&& [ "$remove_backup"   ] && delete_backup \
+		&& [ "$expire"          ] && delete_reflog \
+		&& [ "$prune"           ] && delete_objects
+	logger "Nuking $path_name : End"
+	printf '%s\n' "$log_summary"
+}
+
+parse_args "$@"
+check_depends
+main
+
