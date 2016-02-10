@@ -1,0 +1,126 @@
+#!/bin/sh
+
+# Copies system config files for storing in a git repo
+# Optionally changes file permissions to allow using non-privileged git user.
+# Optionally stages files to git.
+# Optionally commits changes to git.
+# Git operations are optional to enable user review `git diff` first.
+
+
+# USER SETTINGS
+
+config_file='backup-config.cfg'
+make_world_readable=1
+auto_stage=0
+auto_commit=0
+
+
+# GENERIC FUNCTIONS
+
+error_msg() {
+	echo "ERROR: $*"
+	exit 1
+}
+
+format_path() {
+	[ -z "$1" ] && return 1
+	# remove repeated '/'
+	path=$(printf "$1" | tr --squeeze-repeats '/')
+	# remove trailing '/'
+	path=${path%/}
+	# return
+	printf "$path"
+}
+
+is_root_user() {
+	[ $(id -u) -eq 0 ] && [ "$USER" = "root" ]
+}
+
+is_sudo_user() {
+	[ $(id -u) -eq 0 ] && [ "$USER" != "root" ]
+}
+
+
+# WORKER FUNCTIONS
+
+permission_denied='Permission_denied'
+error_msg_no_git='Must be run from a git repository.'
+error_msg_no_config='Cannot find config file.'
+error_msg_permission1='Permission denied accessing'
+error_msg_permission2='Please run with sudo or as root.'
+
+set_root_dir() {
+	root_dir=$(git rev-parse --show-toplevel)
+	if ! ([ "$root_dir" ] && [ -d "$root_dir" ]); then
+		error_msg "$error_msg_no_git"
+	fi
+}
+
+set_config_file() {
+	file="$PWD/$config_file"
+	if [ -r "$file" ]; then
+		config_file="$file"
+	else
+		file="$root_dir/$config_file"
+		if [ -r "$file" ]; then
+			config_file="$file"
+		else
+			error_msg "$error_msg_no_config"
+		fi
+	fi
+}
+
+copy_files() {
+	# If specified files are not readable, then cp will fail.
+	# Allow this
+	grep -v '^\s*#' "$config_file" | while IFS= read -r line; do
+		[ -z "$line" ] && continue
+		if ! cp -auv --parents "$line" "$root_dir/"; then
+			if [ "$(ls "$line" 2>&1 | grep "$permission_denied")" ]; then
+				error_msg "$error_msg_permission1 '$line'. $error_msg_permission2"
+			fi
+		fi
+	done
+}
+
+fix_permissions() {
+	# manual hack to allow non-privileged `git` user access to the files
+	# - requires running script with `sudo` to copy and change permissions.
+	set_file_world_readable "etc/ssh/sshd_config"
+	set_file_world_readable "etc/sudoers"
+
+	set_directory_world_readable "etc/sudoers.d/"
+	set_directory_world_readable "var/spool/cron/"
+}
+
+set_file_world_readable() {
+	[ -r "$1" ] && chmod a+r "$1"
+}
+
+set_directory_world_readable() {
+	if [ -r "$1" ]; then
+		chmod    a+x "$1"
+		chmod -R a+r "$1"
+	fi
+}
+
+git_stage() {
+	git add --all
+}
+
+git_commit() {
+	git commit -m 'Auto backup'
+}
+
+
+# MAIN PROC
+
+set_git_root
+set_config_file
+
+pushd "$git_root" > /dev/null
+	copy_files
+	[ "$make_world_readable" -eq 1 ] && fix_permissions
+	if [ "$auto_stage" -eq 1 ] || [ "$auto_commit" -eq 1 ]; then git_stage; fi
+	[ "$auto_commit" -eq 1 ] && git_commit
+popd > /dev/null
