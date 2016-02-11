@@ -135,9 +135,10 @@ git_commit() {
 set_root_dir
 set_config_file
 
-pushd "$git_root" > /dev/null
+_pwd="$PWD"
+cd "$git_root"
 	copy_files
 	[ "$make_world_readable" -eq 1 ] && fix_permissions
 	if [ "$auto_stage" -eq 1 ] || [ "$auto_commit" -eq 1 ]; then git_stage; fi
 	[ "$auto_commit" -eq 1 ] && git_commit
-popd > /dev/null
+cd "$_pwd"
