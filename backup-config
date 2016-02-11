@@ -134,13 +134,13 @@ dump_ip_config() {
 	ip rule                            >> "$log"
 
 	for table in $(ip rule | awk '/lookup/' { print $NF }); do
-		echo "== ip route table $(ip_table_number $table) $table ==" >> "$log"
-	  ip route show table $table         >> "$log"
+		echo "== ip route table $(ip_table_number $table)$table ==" >> "$log"
+		ip route show table $table       >> "$log"
 	done
 }
 
 ip_table_number() {
-	ip rule | awk '/lookup '$1'/ { print $1 }'
+	ip rule | awk -v table="lookup $1" '{ if ($0 ~ table) print $1 }'
 }
 
 git_stage() {
