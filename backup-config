@@ -22,6 +22,10 @@ error_msg() {
 	exit 1
 }
 
+warn_msg() {
+	echo "WARNING: $*"
+}
+
 format_path() {
 	[ -z "$1" ] && return 1
 	# remove repeated '/'
@@ -43,11 +47,16 @@ is_sudo_user() {
 
 # WORKER FUNCTIONS
 
+# Globals
+script_name='backup_config'
+# UI strings
 permission_denied='Permission_denied'
 error_msg_no_git='Must be run from a git repository.'
 error_msg_no_config='Cannot find config file.'
 error_msg_permission1='Permission denied accessing'
 error_msg_permission2='Please run with sudo or as root.'
+warn_msg_not_readable='is not readable'
+commit_message='Auto backup'
 
 set_root_dir() {
 	root_dir=$(git rev-parse --show-toplevel)
@@ -57,27 +66,28 @@ set_root_dir() {
 }
 
 set_config_file() {
-	file="$PWD/$config_file"
-	if [ -r "$file" ]; then
-		config_file="$file"
-	else
-		file="$root_dir/$config_file"
-		if [ -r "$file" ]; then
-			config_file="$file"
-		else
-			error_msg "$error_msg_no_config"
-		fi
-	fi
+	file1="$PWD/$config_file"
+	file2="$root_dir/$config_file"
+	file3="$XDG_CONFIG_HOME/$script_name/$config_file"
+	file4="$HOME/.config/$script_name/$config_file"
+
+	# allow passing in config_file in environment
+	[ -z "$config_file" ] && [ -r "$file1" ] && config_file="$file1"
+	[ -z "$config_file" ] && [ -r "$file2" ] && config_file="$file2"
+	[ -z "$config_file" ] && [ -r "$file3" ] && config_file="$file3"
+	[ -z "$config_file" ] && [ -r "$file4" ] && config_file="$file4"
+	[ -z "$config_file" ] && error_msg "$error_msg_no_config"
 }
 
 copy_files() {
 	# If specified files are not readable, then cp will fail.
-	# Allow this
 	grep -v '^\s*#' "$config_file" | while IFS= read -r line; do
 		[ -z "$line" ] && continue
 		if ! cp -auv --parents "$line" "$root_dir/"; then
 			if [ "$(ls "$line" 2>&1 | grep "$permission_denied")" ]; then
 				error_msg "$error_msg_permission1 '$line'. $error_msg_permission2"
+			else
+				warn_msg "'$line' $warn_msg_not_readable"
 			fi
 		fi
 	done
@@ -109,7 +119,7 @@ git_stage() {
 }
 
 git_commit() {
-	git commit -m 'Auto backup'
+	git commit -m "$commit_message"
 }
 
 
