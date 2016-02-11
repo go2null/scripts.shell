@@ -116,7 +116,7 @@ set_file_world_readable() {
 
 set_directory_world_readable() {
 	if [ -r "$1" ]; then
-		chmod    a+x "$1"
+		chmod -R a+x "$1"
 		chmod -R a+r "$1"
 	fi
 }
