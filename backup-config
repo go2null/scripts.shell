@@ -121,6 +121,28 @@ set_directory_world_readable() {
 	fi
 }
 
+dump_ip_config() {
+	log='ip_config.log'
+	echo "== hostname =="               > "$log"
+	echo "hostname:    $(hostname)"    >> "$log"
+	echo "hostname -f: $(hostname -f)" >> "$log"
+
+	echo "== ip addr =="               >> "$log"
+	ip addr                            >> "$log"
+
+	echo "== ip rule =="               >> "$log"
+	ip rule                            >> "$log"
+
+	for table in $(ip rule | awk '/lookup/' { print $NF }); do
+		echo "== ip route table $(ip_table_number $table) $table ==" >> "$log"
+	  ip route show table $table         >> "$log"
+	done
+}
+
+ip_table_number() {
+	ip rule | awk '/lookup '$1'/ { print $1 }'
+}
+
 git_stage() {
 	git add --all
 }
@@ -138,6 +160,7 @@ set_config_file
 _pwd="$PWD"
 cd "$git_root"
 	copy_files
+	dump_ip_config
 	[ "$make_world_readable" -eq 1 ] && fix_permissions
 	if [ "$auto_stage" -eq 1 ] || [ "$auto_commit" -eq 1 ]; then git_stage; fi
 	[ "$auto_commit" -eq 1 ] && git_commit
