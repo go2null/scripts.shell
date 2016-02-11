@@ -53,9 +53,10 @@ script_name='backup_config'
 permission_denied='Permission_denied'
 error_msg_no_git='Must be run from a git repository.'
 error_msg_no_config='Cannot find config file.'
-error_msg_permission1='Permission denied accessing'
-error_msg_permission2='Please run with sudo or as root.'
-warn_msg_not_readable='is not readable'
+error_msg_copy_no_permission1='Permission denied accessing'
+error_msg_copy_no_permission2='Please run with sudo or as root.'
+warn_msg_copy_not_exist='is not readable.'
+warn_msg_copy_unknown='Error occured when trying to copy.'
 commit_message='Auto backup'
 
 set_root_dir() {
@@ -83,12 +84,18 @@ copy_files() {
 	# If specified files are not readable, then cp will fail.
 	grep -v '^\s*#' "$config_file" | while IFS= read -r line; do
 		[ -z "$line" ] && continue
+
+		if ! [ -e "$line" ]; then
+			warn_msg "'$line' $warn_msg_copy_not_exist"
+			continue
+		fi
+
+		if ! [ -r "$line" ]; then
+			error_msg "$error_msg_copy_no_permission1 '$line'. $error_msg_copy_no_permission2"
+		fi
+
 		if ! cp -auv --parents "$line" "$root_dir/"; then
-			if [ "$(ls "$line" 2>&1 | grep "$permission_denied")" ]; then
-				error_msg "$error_msg_permission1 '$line'. $error_msg_permission2"
-			else
-				warn_msg "'$line' $warn_msg_not_readable"
-			fi
+			warn_msg "'$line' $warn_msg_copy_unknown"
 		fi
 	done
 }
@@ -125,7 +132,7 @@ git_commit() {
 
 # MAIN PROC
 
-set_git_root
+set_root_dir
 set_config_file
 
 pushd "$git_root" > /dev/null
