@@ -133,7 +133,7 @@ dump_ip_config() {
 	echo "== ip rule =="               >> "$log"
 	ip rule                            >> "$log"
 
-	for table in $(ip rule | awk '/lookup/' { print $NF }); do
+	for table in $(ip rule | awk '/lookup/ { print $NF }'); do
 		echo "== ip route table $(ip_table_number $table)$table ==" >> "$log"
 		ip route show table $table       >> "$log"
 	done
