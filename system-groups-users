@@ -1,23 +1,63 @@
 #!/bin/sh
 
+# IN: user-id (uid)
 user_from_id() {
 	user=$(grep ":$1:" /etc/passwd)
 	printf ${user%%:*}
 	#	[ "$1" ] && awk -F':' '{ if ($4 == '$1') print $1 }' /etc/passwd
 }
 
+# IN: group-id (gid)
 group_from_id() {
 	group=$(grep ":$1:" /etc/group)
 	printf ${group%%:*}
 }
 
-user_groups() {
-	awk -F':' '{ if (index($4,"'$1'") > 0) printf $1" " }' < /etc/group
+# IN: username (login)
+supplementary_groups() {
+	awk -F':' '{ if (index($4,"'$1'") > 0) printf ","$1 }' < /etc/group \
+		| sed 's/^,//'
 }
 
-while read line; do
-	primary_group=$(     group_from_id $(printf $line | awk -F':' '{ print $4 }'))
-	supplementary_groups=$(user_groups $(printf $line | awk -F':' '{ print $1 }'))
-	[ -z "$supplementary_groups" ] && supplementary_groups='-no supplementary groups--'
-	printf "$line\n" | sed "s/:[0-9][0-9]*:[0-9][0-9]*:/&${primary_group}:${supplementary_groups}:/"
-done < /etc/passwd
+# IN: group-id (gid)
+users_with_primary_group_id() {
+	awk -F':' '{ if ($4 == "'$1'") printf ","$1 }' < /etc/passwd \
+		| sed 's/^,//'
+}
+
+
+# OUT: users with primary and supplementary groups
+users_with_groups() {
+	while read line; do
+		primary_group=$(      group_from_id $(printf $line | awk -F':' '{ print $4 }'))
+
+		other_groups=$(supplementary_groups $(printf $line | awk -F':' '{ print $1 }'))
+		# pad empty field to enable using `column -ts:` which collapes empty columns
+		[ -z "$other_groups" ] && other_groups='-'
+
+		printf "$line\n" | \
+			sed              \
+				-e "s/:[0-9][0-9]*:[0-9][0-9]*:/&${primary_group}:${other_groups}:/" \
+				-e 's/::/:-:/' # pad empty field to enable using `column`
+	done < /etc/passwd
+}
+
+# OUT: groups with all users
+groups_with_users() {
+	while read line; do
+		users=$(users_with_primary_group_id $(printf $line | awk -F':' '{ print $3 }'))
+		printf "${line}$users\n"
+	done < /etc/group
+}
+
+echo '-----:-:---:---:-----:------------:---------:--------:-----'
+echo 'login:x:uid:gid:group:supplemental:user-info:home-dir:shell'
+echo '-----:-:---:---:-----:------------:---------:--------:-----'
+users_with_groups
+
+echo '-----:-:---:-----'
+echo 'group:x:gid:users'
+echo '-----:-:---:-----'
+groups_with_users
+
+
