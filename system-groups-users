@@ -1,0 +1,23 @@
+#!/bin/sh
+
+user_from_id() {
+	user=$(grep ":$1:" /etc/passwd)
+	printf ${user%%:*}
+	#	[ "$1" ] && awk -F':' '{ if ($4 == '$1') print $1 }' /etc/passwd
+}
+
+group_from_id() {
+	group=$(grep ":$1:" /etc/group)
+	printf ${group%%:*}
+}
+
+user_groups() {
+	awk -F':' '{ if (index($4,"'$1'") > 0) printf $1" " }' < /etc/group
+}
+
+while read line; do
+	primary_group=$(     group_from_id $(printf $line | awk -F':' '{ print $4 }'))
+	supplementary_groups=$(user_groups $(printf $line | awk -F':' '{ print $1 }'))
+	[ -z "$supplementary_groups" ] && supplementary_groups='-no supplementary groups--'
+	printf "$line\n" | sed "s/:[0-9][0-9]*:[0-9][0-9]*:/&${primary_group}:${supplementary_groups}:/"
+done < /etc/passwd
