@@ -17,5 +17,5 @@ groups_with_users() {
 echo '-----:-:---:-----'
 echo 'group:x:gid:users'
 echo '-----:-:---:-----'
-groups_with_users
+groups_with_users | sort -t':' -nk3
 

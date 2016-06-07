@@ -31,5 +31,5 @@ users_with_groups() {
 echo '-----:-:---:---:-----:------------:---------:--------:-----'
 echo 'login:x:uid:gid:group:supplemental:user-info:home-dir:shell'
 echo '-----:-:---:---:-----:------------:---------:--------:-----'
-users_with_groups
+users_with_groups | sort -t':' -nk3
 
