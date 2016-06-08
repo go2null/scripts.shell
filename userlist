@@ -1,0 +1,109 @@
+#!/bin/sh
+
+version='0.3 [2016-06-08]'
+
+printHelp() {
+	cat <<-EOF
+	Version: $version
+	Usage: $(basename -- $0) [options] ...
+	Selection options:
+	-r, --regular      - show non-system accounts
+	-p, --privileged   - TODO: show non-system accounts with system group membership
+	-u, --unprivileged - TODO: show non-system accounts without system group membership
+	-s, --system       - show system accounts
+	Output options:
+	-i, --id           - sort output by id
+	-l, --login        - sort output by login
+	-t, --no-tabulate  - do not tabulate output
+	EOF
+}
+
+init_id_ranges() {
+	uid_min=$(grep '^UID_MIN' /etc/login.defs | cut -d' ' -f2- | tr -d ' ')
+	uid_max=$(grep '^UID_MAX' /etc/login.defs | cut -d' ' -f2- | tr -d ' ')
+	uid_min=${uid_min:-1000}
+	uid_max=${uid_max:-60000}
+}
+
+# IN: group-id (gid)
+group_from_id() {
+	group=$(grep ":$1:" /etc/group)
+	printf "%s" "${group%%:*}"
+}
+
+# IN: username (login)
+supplementary_groups() {
+	other_groups=$(groups "$1" | cut -d' ' -f4- | tr ' ' ',')
+	# pad empty field to enable using `column -ts:` which collapes empty columns
+	printf "%s" "${other_groups:--}"
+}
+
+# OUT: users with primary and supplementary groups
+users_with_groups() {
+	init_id_ranges
+
+	while read line; do
+		primary_group=$(      group_from_id $(printf $line | cut -d':' -f4))
+		other_groups=$(supplementary_groups ${line%%:*})
+
+		printf "$line" | awk -F':' '{ \
+			if ($5 == "") $5="-"
+				if (("1" == "'"$all"'") \
+					|| (("1" == "'"$regular"'") &&  ($3 >= '"$uid_min"') && ($3 <= '"$uid_max"')) \
+					|| (("1" == "'"$system"'")  && (($3 <  '"$uid_min"') || ($3 >  '"$uid_max"')))) \
+					print $1":"$2":"$3":"$4"':$primary_group:$other_groups:'"$5":"$6":"$7 }'
+			done < /etc/passwd
+		}
+
+		sort_output() {
+			if [ "$sort_by_id" ]; then
+				users_with_groups | sort -t':' -nk3
+			elif [ "$sort_by_login" ]; then
+				users_with_groups | sort
+			else
+				users_with_groups
+			fi
+		}
+
+		prepend_header() {
+			echo 'account:x:uid:gid:group:supplemental:gecos-user-info:home-dir:shell'
+			echo '-------:-:---:---:-----:------------:---------------:--------:-----'
+			sort_output
+		}
+
+
+		parse_args() {
+			# get input options
+			while [ $# -gt 0 ]; do
+				case "$1" in
+					'-r'|'--regular'      ) regular=1          ;;
+					'-p'|'--privileged'   ) privileged=1       ;;
+					'-u'|'--unprivileged' ) unprivileged=1     ;;
+					'-s'|'--system'       ) system=1           ;;
+					'-i'|'--id'           ) sort_by_id=1       ;;
+					'-l'|'--login'        ) sort_by_login=1    ;;
+					'-t'|'--no-tabulate'  ) no_tabulate=1      ;;
+					'-h'|'--help'    ) {                             printHelp; exit; } ;;
+					'-V'|'--version' ) { echo "$(basename -- $0) $version";     exit; } ;;
+					*                ) { echo "unknown option '$1'"; printHelp; exit; } ;;
+				esac
+				shift
+			done
+
+			if [ -n "$privileged" ] && [ -n "$unprivileged" ]; then regular=1; fi
+			if [ -n "$regular"    ] && [ -n "$system"       ]; then all=1;     fi
+			if [ -z "$regular"    ] && [ -z "$system"       ]; then all=1;     fi
+
+			if [ -z "$no_tabulate" ] && [ "$(type -t column)" = '' ]; then
+				no_tabulate='no-column-command'
+			fi
+		}
+
+
+		parse_args "$@"
+		if [ -n "$no_tabulate" ]; then
+			sort_output
+		else
+			prepend_header | column -ts':' --
+		fi
+
