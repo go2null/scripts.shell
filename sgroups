@@ -1,0 +1,90 @@
+#!/bin/sh
+
+version=0.2
+
+printHelp() {
+	cat <<-EOF
+	Version: $version
+	Usage: $(basename -- $0) [option] ...
+	Options:
+	-s|--no-system   - exclude system accounts
+	-i|--id          - sort output by id
+	-l|--login       - sort output by login
+	-t|--no-tabulate - do not tabulate output
+	EOF
+}
+
+init_id_ranges() {
+	gid_min=$(grep '^GID_MIN' /etc/login.defs | cut -d' ' -f2- | tr -d ' ')
+	gid_max=$(grep '^GID_MAX' /etc/login.defs | cut -d' ' -f2- | tr -d ' ')
+	gid_min=${gid_min:-'1000'}
+	gid_max=${gid_max:-'60000'}
+}
+
+# IN: group-id (gid)
+users_with_primary_group_id() {
+	users=$(grep ":[0-9][0-9]*:$1:" /etc/passwd | cut -d':' -f1 | tr '\n' ',')
+	printf "%s" "${users##,}"
+}
+
+# OUT: groups with all users
+groups_with_users() {
+	init_id_ranges
+
+	while read line; do
+		users=$(users_with_primary_group_id $(printf $line | cut -d':' -f3))
+
+		printf "$line" | awk -F':' '{ \
+			if (("0" == "'"$no_system_accounts"'") \
+				|| (($3 >= '"$gid_min"') && ($3 <= '"$gid_max"'))) \
+				print $0":'$users'" }'
+	done < /etc/group
+}
+
+sort_output() {
+	if [ "$sort_by_id" ]; then
+		groups_with_users | sort -t':' -nk3
+	elif [ "$sort_by_login" ]; then
+		groups_with_users | sort
+	else
+		groups_with_users
+	fi
+}
+
+prepend_header() {
+	echo 'group:x:gid:users'
+	echo '-----:-:---:-----'
+	sort_output
+}
+
+parse_args() {
+	# defaults
+	no_system_accounts=0
+
+	# get input options
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			'-s'|'--no-system'   ) no_system_accounts=1 ;;
+			'-i'|'--id'          ) sort_by_id=1         ;;
+			'-l'|'--login'       ) sort_by_login=1      ;;
+			'-t'|'--no_tabulate' ) no_tabulate=1        ;;
+			'-h'|'--help'    ) {                             printHelp; exit; } ;;
+			'-V'|'--version' ) { echo "$version";                       exit; } ;;
+			*                ) { echo "unknown option '$1'"; printHelp; exit; } ;;
+		esac
+		shift
+	done
+
+	if [ -z "$no_tabulate" ] && [ "$(type -t column)" = '' ]; then
+		no_tabulate='no-column-command'
+	fi
+}
+
+
+parse_args "$@"
+if [ -n "$no_tabulate" ]; then
+	sort_output
+else
+	prepend_header | column -ts':' --
+fi
+
