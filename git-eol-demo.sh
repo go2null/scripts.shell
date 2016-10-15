@@ -1,10 +1,5 @@
 #!/bin/sh
 
-date_time() {
-  sleep 1
-  date +'%Y%m%d-%H%M%S'
-}
-
 settings() {
   [ "$1" ] && a="$1" || a=$(git config core.autocrlf)
   [ "$2" ] && e="$2" || e=$(git config core.eol)
@@ -14,17 +9,18 @@ settings() {
 report() {
   if [ "$1" ]; then
     change="$1"
-  elif ! grep -zP '\r\n' "$crlf_file" >/dev/null; then
-    change='CRLF->LF'
-  elif grep -zP '\r\n' "$lf_file" >/dev/null; then
-    change='LF->CRLF'
   else
-    change='no-change'
+    case $(cat -ve * | grep '\^M\$$' | wc -l) in
+      2) change='LF>CRLF'   ;;
+      1) change='no-change' ;;
+      0) change='CRLF>LF'   ;;
+      *) change='UNKNOWN'   ;;
+    esac
   fi
 
   printf '%-8s %-6s %-10s  %-8s %-6s %-9s\n' \
-    "$set_a" \
-    "$set_e" \
+    "$inA" \
+    "$inE" \
     "$report_input" \
     "$(git config core.autocrlf)" \
     "$(git config core.eol)"      \
@@ -48,38 +44,38 @@ git config user.email 'git.eol@example.com'
 git config core.safecrlf warn
 
 autocrlf='false input true'
-eol='native crlf lf'
+eol='native lf crlf'
 
 printf '%-26s  %s\n' \
-  'Check in files'          'Check out files'             > "$report_file"
+  'Check in files'          'Check out files'              > "$report_file"
 printf '%-8s %-6s %-10s  %-8s %-6s %s\n' \
   'AUTOCRLF' 'EOL' 'COMMIT' 'AUTOCRLF' 'EOL' 'CONVERSION' >> "$report_file"
 
 # loop through each autocrlf/eol combination
-for set_a in $(echo $autocrlf); do
-  for set_e in $(echo $eol); do
+for inA in $(echo $autocrlf); do
+  for inE in $(echo $eol); do
     printf '\n%52s\n' "=" | tr ' ' '='
-    printf '%-15s  %s\n' 'IN:' "$(settings "$set_a" "$set_e")"
+    printf '%-15s  %s\n' 'IN:' "$(settings "$inA" "$inE")"
 
-    git config core.autocrlf $set_a
-    git config core.eol $set_e
+    git config core.autocrlf $inA
+    git config core.eol $inE
 
-    dt="$(date_time)" # ensure have something to commit
-    printf '%-15s  %s  %4s \r\n' "$dt" "$(settings $set_a $set_e)" 'crlf' > "$crlf_file"
-    printf '%-15s  %s  %4s \n'   "$dt" "$(settings $set_a $set_e)"   'lf' > "$lf_file"
+    counter=$(($counter+1)) # ensure have something to commit
+    printf '%-15s  %s  %4s \r\n' "$counter" "$(settings $inA $inE)" 'crlf' > "$crlf_file"
+    printf '%-15s  %s  %4s \n'   "$counter" "$(settings $inA $inE)"   'lf' > "$lf_file"
     cat -ve *
 
-    git add .
-    commit_response=$(git commit -m "$dt core.autocrlf=$set_a core.eol=$set_e" 2>&1 | head -1)
+    commit_response=$(git add . 2>&1)
     if echo "$commit_response" | grep 'LF will be replaced by CRLF'; then
-      report_input='LF->CRLF'
+      report_input='LF>CRLF'
     elif echo "$commit_response" | grep 'CRLF will be replaced by LF'; then
-      report_input='CRLF->LF'
+      report_input='CRLF>LF'
     elif echo "$commit_response" | grep 'conflicts'; then
       report_input='CONFLICT'
     else
       report_input='no-warning'
     fi
+    git commit -m "$dt core.autocrlf=$inA core.eol=$inE"
 
     for outA in $(echo $autocrlf); do
       for outE in $(echo $eol); do
