@@ -1,31 +1,90 @@
 #!/bin/sh
 # see https://help.github.com/articles/changing-author-info/
 
-[ -n "$1" ] && new_name="$1"  || exit 1
-[ -n "$2" ] && new_email="$2" || exit 1
+version='0.0.1+20160926'
 
-[ -n "$3" ] && old_name="$3"  || exit 1
-[ -n "$3" ] && old_email="$4" || exit 1
+print_help() {
+	printf %s "\
+    VERSION: $version
 
-old_name_lower=$(echo "$old_name"   | tr [:upper:] [:lower:])
-old_email_lower=$(echo "$old_email" | tr [:upper:] [:lower:])
+  USAGE: $(basename -- $0) [<options>] [args] [--] [<path>]
 
-git filter-branch -f --env-filter '
-	git_committer_name=$( echo "$GIT_COMMITTER_NAME"  | tr [:upper:] [:lower:])
-	git_committer_email=$(echo "$GIT_COMMITTER_EMAIL" | tr [:upper:] [:lower:])
-	if   [ "$git_committer_name"  = "'"$old_name_lower"'"  ] \
-		&& [ "$git_committer_email" = "'"$old_email_lower"'" ]
-	then
-  	export GIT_COMMITTER_NAME="'"$new_name"'"
-  	export GIT_COMMITTER_EMAIL="'"$new_email"'"
-	fi
+  OPTIONS
+  -h, --help             - Display this help screen and exit
+  -V, --version          - Display version info and exit
+  --                     - end of options, path is next
 
-	git_author_name=$( echo "$GIT_AUTHOR_NAME"  | tr [:upper:] [:lower:])
-	git_author_email=$(echo "$GIT_AUTHOR_EMAIL" | tr [:upper:] [:lower:])
-	if   [ "$git_author_name"  = "'"$old_name_lower"'"  ] \
-		&& [ "$git_author_email" = "'"$old_email_lower"'" ]
-	then
-  	export GIT_AUTHOR_NAME="'"$new_name"'"
-  	export GIT_AUTHOR_EMAIL="'"$new_email"'"
-	fi
+  ARGUEMENTS
+  new_name new_email old_name old_email
+
+  DESCRIPTION
+  * WARNING: backup (clone) your repo first!
+  * path = file: list all commits where file changed.
+  * path = directory: lists all commits for all files in its tree.
+  * Paths must not contain newline characters.
+
+  EXAMPLES
+  $(basename -- $0) .ssh/id_rsa
+  $(basename -- $0) Documents/
+  "
+}
+
+parse_args() {
+	# defaults
+	unset new_name
+	unset new_email
+	unset old_name
+	unset old_email
+  unset path_name
+
+	case "$1" in
+		'-h'|'--help'            ) { print_help;      exit;           } ;;
+	  '-V'|'--version'         ) { echo "$version"; exit;           } ;;
+  esac
+
+  [ $# -lt 4 ] && print_help && exit 1
+  new_name="$1"
+  new_email="$2"
+  old_name="$3"
+  old_email="$4"
+
+  [ "$5" == '--' ] && shift
+  [ "$5" ] && path_name="$5" || path_name="$PWD"
+  if [ ! -d "$path_name" ]; then
+    echo "Invalid path '$path_name'"
+    print_help
+    exit 1
+  fi
+}
+
+main() {
+  pushd "$path_name"
+
+  old_name_lower=$( echo "$old_name"  | tr [:upper:] [:lower:])
+  old_email_lower=$(echo "$old_email" | tr [:upper:] [:lower:])
+
+  git filter-branch -f --env-filter '
+git_committer_name=$( echo "$GIT_COMMITTER_NAME"  | tr [:upper:] [:lower:])
+git_committer_email=$(echo "$GIT_COMMITTER_EMAIL" | tr [:upper:] [:lower:])
+if   [ "$git_committer_name"  = "'"$old_name_lower"'"  ] \
+	&& [ "$git_committer_email" = "'"$old_email_lower"'" ]
+then
+export GIT_COMMITTER_NAME="'"$new_name"'"
+export GIT_COMMITTER_EMAIL="'"$new_email"'"
+fi
+
+git_author_name=$( echo "$GIT_AUTHOR_NAME"  | tr [:upper:] [:lower:])
+git_author_email=$(echo "$GIT_AUTHOR_EMAIL" | tr [:upper:] [:lower:])
+if   [ "$git_author_name"  = "'"$old_name_lower"'"  ] \
+&& [ "$git_author_email" = "'"$old_email_lower"'" ]
+then
+  export GIT_AUTHOR_NAME="'"$new_name"'"
+  export GIT_AUTHOR_EMAIL="'"$new_email"'"
+fi
 ' --tag-name-filter cat -- --all
+
+  popd
+}
+
+parse_args "$@"
+main
