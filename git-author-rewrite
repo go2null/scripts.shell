@@ -48,7 +48,7 @@ parse_args() {
   old_name="$3"
   old_email="$4"
 
-  [ "$5" == '--' ] && shift
+  [ "$5" = '--' ] && shift
   [ "$5" ] && path_name="$5" || path_name="$PWD"
   if [ ! -d "$path_name" ]; then
     echo "Invalid path '$path_name'"
@@ -58,7 +58,8 @@ parse_args() {
 }
 
 main() {
-  pushd "$path_name"
+  old_pwd="$PWD"
+  cd "$path_name"
 
   old_name_lower=$( echo "$old_name"  | tr [:upper:] [:lower:])
   old_email_lower=$(echo "$old_email" | tr [:upper:] [:lower:])
@@ -83,7 +84,7 @@ then
 fi
 ' --tag-name-filter cat -- --all
 
-  popd
+  cd "$old_pwd"
 }
 
 parse_args "$@"
