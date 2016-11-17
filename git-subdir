@@ -17,9 +17,9 @@ foreach() {
 }
 
 # parse command-line overrides
-if [ ! -z "$1"  -a  -d "$1" ]; then
-	DIR="$1"
-	pushd "$DIR" >/dev/null
+if [ "$1" ] && [ -d "$1" ]; then
+	old_pwd="$PWD"
+	cd "$1"
 	shift
 fi
 
@@ -28,5 +28,4 @@ case "$1" in
 	*)                foreach       ;;
 esac
 
-[ -z "$DIR" ] || popd >/dev/null
-
+[ "$old_pwd" ] && cd "$old_pwd"
