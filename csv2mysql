@@ -5,6 +5,8 @@ VERSION='0.0.0:2013-09-07:go2null'
 # * Initial release
 VERSION='0.1.0:2013-09-11:go2null'
 # * Added command line options support
+VERSION='0.1.1:2016-11-18:go2null'
+# * Refactor
 
 doCleanup() {
 	rm -f "$TEMP_IN_FILE"
@@ -20,35 +22,40 @@ USAGE
   $(basename $0) -i FILE_SPEC [-n #] -f STRING [-l STRING] [-o FILENAME] [-a]
 
 OPTIONS
-  -a            - Append to out-file.  Default is to overwrite. 
+  -a            - Append to out-file.  Default is to overwrite.
   -f STRING     - Field delimiter.
   -h, --help    - Display this help screen and exit
-  -i FILE_SPEC  - Filespec of in-files. If includes wildcards, must enclose in single quotes.
-  -l STRING     - STRING to use as end-of-record (end-of-row).  Default is '<Field Demiliter>\n'.
+  -i FILE_SPEC  - Filespec of in-files. If wildcards are included,
+                  then it must be enclosed in single quotes.
+  -l STRING     - STRING to use as end-of-record (end-of-row).
+                  Default is '<Field Demiliter>\n'.
   -n #          - Number of header rows.  Default is 1.
   -o FILENAME   - Out-file.  Default is 'out.csv'.
   -v, --version - Display version info and exit
 
 DESCRIPTION
-* This script will parse CSV files into a format suitable for import into MySQl, etc.
-* The output file will have embedded End-Of-Lines (\n on *nix, \r\n on Windows) converted to \n,
-  true row EOLs will be \r\n,
-  and the field delimiter will be retained.  
+* This script will reformat CSV files to be suitable for import into MySQl, etc.
+* The output file will have embedded End-Of-Lines (\n on *nix, \r\n on Windows)
+  converted to \n, true row EOLs will be \r\n, and the field delimiter will be
+  retained.
 * To accomplish this, in the source CSV,
-  1. the field delimiter must be a character/string that is not present in the source data.
-  2. the line delimiter can simply be multiple field delimiters at the end of a line (EOL) in the CSV.
-     * Easily done by adding a number of empty rightmost columns to the source data.)
+  1. the field delimiter must be a character/string that is not present in the
+     source data.
+  2. the line delimiter can simply be multiple field delimiters at the end of a
+     line (EOL) in the CSV.
+     * Easily done by adding a number of empty rightmost columns to the source.
      * The limiting case is the number of valid sequential columns with no data
        that are followed by a column with data that starts with EOL.
 * The idea is to be able to accurately identify a true End-Of-Row
   from a text blob with embedded EOLs
-* This allows having to only identify one character that is not present in the source data.
+* This allows having to only identify one character that is not present in the
+  source data.
 * Empty lines (with only field delimters) are also removed by default.
 
 EXAMPLE
   $(basename $0) -i 'tab*.csv' -f ~
-    This reads in all tab*.csv files, 
-	  ignores line 1 as a header row, 
+    This reads in all tab*.csv files,
+	  ignores line 1 as a header row,
 	  removes empty rows,
 	  treats '~EOL' as line delimter,
 	  writes concatenated files into 'out.csv' with \r\n as line delimter.
@@ -93,7 +100,7 @@ if [ "$NUM_HEADER_ROWS" -eq 0 ]; then
 		exit 1
 	fi
 else
-	for FILE in $IN_FILE_SPEC; do 
+	for FILE in $IN_FILE_SPEC; do
 		if ! tail -n '+'$(($NUM_HEADER_ROWS + 1)) "$FILE" >> "$TEMP_IN_FILE"; then
 			echo "ERROR: Failed to read in-file '$FILE'." >&2
 			exit 1
@@ -112,7 +119,7 @@ sed \
 	"$TEMP_IN_FILE" > "$TEMP_OUT_FILE"
 
 # write out
-if [ "$OVERWRITE_OUT_FILE" -eq 1 ] && [ -e "$OUT_FILE" ]; then 
+if [ "$OVERWRITE_OUT_FILE" -eq 1 ] && [ -e "$OUT_FILE" ]; then
 	if ! rm "$OUT_FILE"; then
 		echo "ERROR: Cannot overwrite '$OUT_FILE'. Data stuck in temp file '$TEMP_OUT_FILE'" >&2
 		exit 1

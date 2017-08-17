@@ -4,14 +4,18 @@
 #  $0 [PARENT-DIRECTORY] [FUNCTION] [ACTION]
 #   PARENT-RECTORY: Default is current directory.
 #   FUNCTION:       Default function is list.
-#   ACTION:         Default action is is list subdirectories.
+#   ACTION:         Default action is to list subdirectories.
+
+# constants
+export F_HEADER='\033[32m'
+export T_NORMAL='\033[0m'
 
 foreach() {
 	find "$PWD" -mindepth 1 -maxdepth 1 -type d -exec sh -c '
 	ACTION=$1
 	shift
 	for i in "$@"; do
-		printf "%s\n" "$i"
+		printf "$F_HEADER%s$T_NORMAL\n" "$i"
 		[ -z "$ACTION" ] || (cd "$i" && $ACTION)
 	done' sh "$1" {} +
 }
