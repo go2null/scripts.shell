@@ -2,40 +2,37 @@
 
 print_help() {
 	cat <<-EOF
-	Version: $version
-	Usage: $(basename -- $0) [<options>] [group] [permissions] [--] <path>
-	Options:
-	-h, --help    - Display this help screen and exit
-	-V, --version - Display version info and exit
-	group         - Group to make owner of new repo. Defaults to user's group.
-	permissions   - Group permission, in octal. Defaults to '0600'.
-	--            - end of options, path is next
-	path          - Paths must not contain newline characters.
-	EOF
+		Version: $version
+		Usage: $(basename -- $0) [<options>] [group] [permissions] [--] <path>
+		Options:
+		-h, --help     - Display this help screen and exit
+		-V, --version  - Display version info and exit
+		-g group       - Group to make owner of new repo. Defaults to user's group.
+		-p permissions - Group permission, in octal. Defaults to '0600'.
+		--             - end of options, path is next
+		path           - Paths must not contain newline characters.
+EOF
 }
 
 parse_args() {
-  group=$(id -ng)
-  permission='0600'
+	group=$(id -ng)
+	permission='0600'
 
-	# get input options
-while [ $# -gt 0 ]; do
-case "$1" in
-'-n'|'--name-only'       ) name_only='--name-only'              ;;
-'-m'|'--no-modifications') no_modifications='--no-modifications';;
-'-h'|'--help'            ) { print_help;      exit;           } ;;
-'-V'|'--version'         ) { echo "$version"; exit;           } ;;
-'--'                     ) { path_name="$2";  break;          } ;;
-*                        ) { path_name="$1";  break;          } ;;
-esac
-shift
-done
-
-directory="$1"
-group=$2
-permissions=$3
+# get input options
+	while [ $# -gt 0 ]; do
+		case "$1" in
+			'-h'|'--help'            ) { print_help;       exit; } ;;
+			'-V'|'--version'         ) { echo "$version";  exit; } ;;
+			'-g'                     ) { group="$2";      shift; } ;;
+			'-p'                     ) { permission="$2"; shift; } ;;
+			'--'                     ) { directory="$2";  break; } ;;
+			*                        ) { directory="$1";         } ;;
+		esac
+		shift
+	done
 }
 
+parse_args "$@"
 sudo mkdir -p "$directory"
 sudo chown -R $group "$directory"
-sudo -u $group git int --bare --shared=$permissions "$directory"
+sudo -u $group git init --bare --shared=$permissions "$directory"
