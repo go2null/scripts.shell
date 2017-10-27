@@ -1,0 +1,48 @@
+#!/bin/sh
+
+# usage: cpx [-n|--dry-run] "from_path" "to_path" "newline_separated_exclude_list"
+# limitations: only excludes from "from_path", not it's subdirectories
+
+cpx() {
+  # run in subshell to avoid collisions
+  (_CopyWithExclude "$@")
+}
+
+_CopyWithExclude() {
+  case "$1" in
+  -n|--dry-run) { DryRun='echo'; shift; } ;;
+  esac
+
+  from="$1"
+  to="$2"
+  exclude="$3"
+
+  $DryRun mkdir -p "$to"
+
+  if [ -z "$exclude" ]; then
+    cp "$from" "$to"
+    return
+  fi
+
+  ls -A1 "$from" \
+    | while IFS= read -r f; do
+    unset excluded
+    if [ -n "$exclude" ]; then
+      for x in $(printf "$exclude"); do
+        if [ "$f" = "$x" ]; then
+          excluded=1
+          break
+        fi
+      done
+    fi
+    f="${f#$from/}"
+    if [ -z "$excluded" ]; then
+      $DryRun cp -R "$f" "$to"
+    else
+      [ -n "$DryRun" ] && echo "skip '$f'"
+    fi
+  done
+}
+
+# Do not execute if being sourced
+[ "${0#*cpx}" != "$0" ] && cpx "$@"
