@@ -11,28 +11,34 @@ print_help() {
 		-p permissions - Group permission, in octal. Defaults to '0600'.
 		--             - end of options, path is next
 		path           - Paths must not contain newline characters.
-EOF
+	EOF
 }
 
 parse_args() {
-	group=$(id -ng)
-	permission='0600'
-
-# get input options
+	# get input options
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			'-h'|'--help'            ) { print_help;       exit; } ;;
-			'-V'|'--version'         ) { echo "$version";  exit; } ;;
-			'-g'                     ) { group="$2";      shift; } ;;
-			'-p'                     ) { permission="$2"; shift; } ;;
-			'--'                     ) { directory="$2";  break; } ;;
-			*                        ) { directory="$1";         } ;;
+			'-h'|'--help'    ) { print_help;       exit; } ;;
+			'-V'|'--version' ) { echo "$version";  exit; } ;;
+			'-g'             ) { group="$2";      shift; } ;;
+			'-p'             ) { permission="$2"; shift; } ;;
+			'--'             ) { directory="$2";  break; } ;;
+			*                ) { directory="$1";         } ;;
 		esac
 		shift
 	done
+	# check directory is specified
+	[ -z "$directory"  ] && print_help && exit
+	# apply defaults
+	[ -z "$group"      ] && group=$(id -ng)
+	[ -z "$permission" ] && permission='0600'
 }
 
-parse_args "$@"
-sudo mkdir -p "$directory"
-sudo chown -R $group "$directory"
-sudo -u $group git init --bare --shared=$permissions "$directory"
+main() {
+	parse_args "$@"
+	sudo mkdir -p "$directory"             \
+		&& sudo chown -R $group "$directory" \
+		&& sudo -u $group git init --bare --shared=$permissions "$directory"
+}
+
+main "$@"
