@@ -1,9 +1,11 @@
 #!/bin/sh
 
+VERSION='1.0.20180302'
+
 print_help() {
 	cat <<-EOF
-		Version: $version
-		Usage: $(basename -- $0) [<options>] [group] [permissions] [--] <path>
+		Version: $VERSION
+		usage: $(basename -- $0) [<options>] [group] [permissions] [--] <path>
 		Options:
 		-h, --help     - Display this help screen and exit
 		-V, --version  - Display version info and exit
