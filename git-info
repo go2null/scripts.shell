@@ -78,32 +78,32 @@ if [ "$IS_RECURSION" != '1' ]; then
 fi
 
 # Remotes are included in Config
-if [ "$REMOTES" == "1" ]; then
+if [ "$REMOTES" = '1' ]; then
 	printf "${T_NORMAL}%s\n" '# = REMOTES = #'
 	git remote -v
 fi
 
-if [ "$BRANCHES" == "1" ]; then
+if [ "$BRANCHES" = '1' ]; then
 	printf "${T_NORMAL}%s\n" '# = BRANCHES = #'
 	git branch --all
 fi
 
-if [ "$TAGS" == "1" ]; then
+if [ "$TAGS" = '1' ]; then
 	printf "${T_NORMAL}%s\n" '# = TAGS = #'
 	git tag #| tr '\n' '\t' && echo
 fi
 
-if [ "$CONFIG" == "1" ]; then
+if [ "$CONFIG" = '1' ]; then
 	printf "${T_NORMAL}%s\n" '# = LOCAL CONFIG = #'
 	git config --local --list | sort | column -t -s '='
 fi
 
-if [ "$SUBMODULES" == "1" ]; then
+if [ "$SUBMODULES" = '1' ]; then
 	printf "${T_NORMAL}%s\n" '# = SUBMODULES = #'
 	git submodule
 fi
 
-if [ "$DESCEND_SUBMODULES" == "1" ]; then
+if [ "$DESCEND_SUBMODULES" = '1' ]; then
 	printf "\n${T_BOLD}"
 	git submodule foreach $RECURSIVE "$0 is_recursion $COMMAND_LINE"
 fi
